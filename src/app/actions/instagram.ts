@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { deleteIgAccounts } from "@/db/queries";
+import { recordActivity } from "@/lib/activity";
 import { requireAdmin } from "@/lib/auth/session";
 import { publishScheduledPost } from "@/lib/instagram/publish";
 
@@ -23,5 +24,6 @@ export async function publishNow(_prev: PublishState, formData: FormData): Promi
 export async function disconnectInstagram() {
   await requireAdmin();
   await deleteIgAccounts();
+  await recordActivity({ level: "info", kind: "instagram.disconnected", message: "Disconnected Instagram" });
   revalidatePath("/settings");
 }

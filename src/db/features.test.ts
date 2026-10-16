@@ -2,6 +2,11 @@ import { eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { autoScheduleIfEnabled, scheduleApprovedPosts } from "@/lib/schedule/service";
 import {
+  ACTIVITY_PAGE_SIZE,
+  countActivity,
+  insertActivity,
+  listActivity,
+  pruneActivity,
   claimForPublishing,
   clearImage,
   countByStatus,
@@ -196,5 +201,52 @@ describe("pagination and counts", () => {
     expect(p2).toHaveLength(total - 1 - PAGE_SIZE);
     expect(new Set([...p1, ...p2].map((p) => p.id)).size).toBe(total - 1);
     expect(await countByStatus()).toEqual({ new: total - 1, approved: 1, rejected: 0, posted: 0 });
+  });
+});
+
+describe("activity log", () => {
+  beforeEach(async () => {
+    await db.delete(schema.activityLog);
+  });
+
+  it("stores events with json meta, newest first, and filters to problems", async () => {
+    // spaced out: rows written in the same millisecond have no defined order
+    const pause = () => new Promise((r) => setTimeout(r, 5));
+    await insertActivity({ level: "info", kind: "a", message: "one", meta: { x: 1 } });
+    await pause();
+    await insertActivity({ level: "warn", kind: "b", message: "two" });
+    await pause();
+    await insertActivity({ level: "error", kind: "c", message: "three" });
+    const all = await listActivity();
+    expect(all.map((r) => r.message)).toEqual(["three", "two", "one"]);
+    expect(all[2].meta).toEqual({ x: 1 });
+    expect(all[1].meta).toBeNull();
+    expect((await listActivity(1, true)).map((r) => r.message)).toEqual(["three", "two"]);
+    expect(await countActivity()).toBe(3);
+    expect(await countActivity(true)).toBe(2);
+  });
+
+  it("pages without gaps or repeats", async () => {
+    for (let i = 0; i < ACTIVITY_PAGE_SIZE + 3; i++) await insertActivity({ level: "info", kind: "k", message: `m${i}` });
+    const [p1, p2] = [await listActivity(1), await listActivity(2)];
+    expect(p1).toHaveLength(ACTIVITY_PAGE_SIZE);
+    expect(p2).toHaveLength(3);
+    expect(new Set([...p1, ...p2].map((r) => r.id)).size).toBe(ACTIVITY_PAGE_SIZE + 3);
+  });
+
+  it("prunes only entries older than the cutoff", async () => {
+    await insertActivity({ level: "info", kind: "new", message: "recent" });
+    await db.insert(schema.activityLog).values({ level: "info", kind: "old", message: "ancient", at: new Date("2020-01-01T00:00:00Z") });
+    expect(await pruneActivity(new Date("2025-01-01T00:00:00Z"))).toBe(1);
+    expect((await listActivity()).map((r) => r.message)).toEqual(["recent"]);
+  });
+
+  it("records an event when scheduling, so the activity page shows it", async () => {
+    await settings();
+    await approved(1);
+    await scheduleApprovedPosts(7, at("2026-10-16T10:00:00Z"));
+    const rows = await listActivity();
+    expect(rows[0]).toMatchObject({ level: "info", kind: "schedule.created" });
+    expect(rows[0].meta).toMatchObject({ count: 1 });
   });
 });

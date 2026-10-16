@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -92,3 +93,18 @@ export const settings = pgTable("settings", {
   autoSchedule: boolean("auto_schedule").default(false).notNull(),
   autoScheduleDays: integer("auto_schedule_days").default(7).notNull(),
 });
+
+// Business events (posted, failed, scraped, logged in...) kept so you can see what
+// happened without the host's short-lived logs. Pruned after 90 days.
+export const activityLog = pgTable(
+  "activity_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
+    level: varchar("level", { length: 8 }).notNull(), // info | warn | error
+    kind: varchar("kind", { length: 48 }).notNull(), // e.g. publish.posted
+    message: text("message").notNull(),
+    meta: jsonb("meta"),
+  },
+  (t) => [index("activity_log_at_idx").on(t.at)],
+);

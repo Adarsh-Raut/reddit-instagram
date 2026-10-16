@@ -92,10 +92,17 @@ Create a media container (image URL + caption) → poll its status until ready �
 - Package manager is npm (the local pnpm/corepack is broken).
 - Next.js here is a newer version than usual; read `node_modules/next/dist/docs/` before using unfamiliar APIs (see AGENTS.md).
 
+## Logging and errors
+
+- Use `getLogger("name")` from `src/lib/log.ts` (Pino). **Never use `console.*`.** Log errors as `log.error({ err }, "what failed")`. Secrets are redacted automatically (`token`, `access_token`, `password`, `secret`, `authorization`, `cookie`...), but don't log them on purpose.
+- For events a human cares about (posted, failed, scraped, login, token refreshed), call `recordActivity({ level, kind, message, meta })` from `src/lib/activity.ts`. It logs AND stores the event in `activity_log`, shown on `/activity` and kept 90 days. It never throws.
+- Dev logs are pretty and colored; production logs are JSON lines. `LOG_LEVEL` overrides the level.
+- We decided against Sentry: Vercel logs are short-lived, so the activity log (permanent, searchable) plus Inngest's run history and the dashboard alerts banner cover it.
+
 ## Layout
 
 - `src/db` — Drizzle schema and lazy Neon client; migrations in `drizzle/`
-- `src/lib` — env validation, Cloudinary helpers
+- `src/lib` — env validation, Cloudinary helpers, `log.ts` (Pino) and `activity.ts`
 - `src/lib/reddit` — Reddit OAuth client, image filtering, scrape service (`scrape.ts` is pure, dependency-injected and unit-tested; `run.ts` wires real services)
 - `src/app/actions` — server actions (scrape, approve/reject, schedule, settings, publish, login/logout), all behind `requireAdmin()`
 - `src/lib/schedule` — `service.ts` (schedule approved posts, auto-schedule), `local-time.ts`, `assignSlots` (pure, timezone/DST-aware slot assignment), formatting helpers

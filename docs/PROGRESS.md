@@ -4,7 +4,7 @@ Last updated: 2026-10-16. Read this first when you come back to the project.
 
 ## Where things stand
 
-**All planned coding is done and covered by automated tests (156 tests, lint, typecheck and production build pass).**
+**All planned coding is done and covered by automated tests (174 tests, lint, typecheck and production build pass).**
 What has *not* happened yet is a run against the real services. Everything external (Reddit, Cloudinary,
 Instagram) has only been exercised with mocks, and the database with a local Docker Postgres.
 
@@ -25,6 +25,7 @@ Nothing has been pushed to GitHub. There is no remote yet. Everything is committ
 | Token refresh | Inngest cron daily 03:00 UTC, refreshes when under 15 days left |
 | Cleanup | Inngest cron daily: deletes Cloudinary images of memes rejected >14 days ago (rows stay, so no re-scrape) |
 | Safety nets | Atomic claim so a post can't be published twice; posts >6h late are marked failed instead of posted late; posts stuck "publishing" >15 min are marked failed with a "check Instagram first" warning; failed posts are never auto-retried |
+| Logging | Pino logger (pretty in dev, JSON in prod, secrets redacted) + permanent `activity_log` table shown on `/activity` (filter to warnings/errors, 90-day retention). No Sentry on purpose: see CLAUDE.md |
 | Alerts banner | Failed posts, Instagram not connected / token expiring or expired, fewer than 2 days queued, approved-but-unscheduled |
 | Login | Single admin password (scrypt hash) + signed 7-day cookie; every action, route and data component checks it |
 
@@ -67,7 +68,8 @@ Use a **throwaway Instagram account**; the post is public.
 6. Settings → **Connect Instagram** → approve in the popup → card shows `@username`
 7. Schedule page → **Publish now** on one post. Confirm it appears on Instagram. Watch for: image rejected (aspect ratio / format), caption wrong, token errors
 8. Automatic publishing: run `INNGEST_DEV=1 npm run dev` plus `npx inngest-cli@latest dev -u http://localhost:3000/api/inngest`, sync with `curl -X PUT localhost:3000/api/inngest`, then schedule a post a few minutes ahead and watch it go out
-9. Try the failure paths: disconnect Instagram and Publish now (expect a clear failure + Retry), edit a caption, move a time, unschedule
+9. Open **Activity** after each step: every scrape, publish, login and failure should appear there with details
+10. Try the failure paths: disconnect Instagram and Publish now (expect a clear failure + Retry), edit a caption, move a time, unschedule
 
 Things most likely to need a small fix on first contact with the real services:
 - Instagram's image requirements (we send a padded 4:5, 1080px-wide JPEG from Cloudinary)
@@ -93,6 +95,12 @@ Things most likely to need a small fix on first contact with the real services:
 - **Local Docker Postgres** is a dedicated container (`reddit_instagram_postgres`, port 5433). Don't touch the `atlas_*` / `sendify_*` containers or port 5432.
 - Package manager is **npm** (the machine's pnpm/corepack is broken).
 - The migration `drizzle/0000_*.sql` was regenerated several times during development because nothing had been deployed. From the first deployment on, add new migrations instead of regenerating.
+
+## Debugging tips
+- **What happened?** Open `/activity` (filter: Warnings and errors). Each entry has a Details section with ids and reasons.
+- **Terminal:** `npm run dev` prints colored logs; set `LOG_LEVEL=debug` to also see each Instagram API response status and each publish step.
+- **Cron jobs:** the Inngest dashboard shows each run, its output and retries.
+- **On Vercel:** logs are JSON, so search for fields such as `"kind":"publish.failed"` (history is short on the free plan, so rely on `/activity` for older events).
 
 ## Handy commands
 ```

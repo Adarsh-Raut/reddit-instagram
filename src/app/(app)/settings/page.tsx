@@ -1,11 +1,13 @@
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/session";
+import { getLogger } from "@/lib/log";
 import { InstagramCard } from "@/components/instagram-card";
 import { SettingsForm } from "@/components/settings-form";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getIgAccount, getSettings } from "@/db/queries";
 import { daysUntil } from "@/lib/instagram/token";
 
+const log = getLogger("pages");
 async function Content({ searchParams }: { searchParams: PageProps<"/settings">["searchParams"] }) {
   await requireAdmin();
   const ig = (await searchParams).ig;
@@ -13,7 +15,7 @@ async function Content({ searchParams }: { searchParams: PageProps<"/settings">[
   try {
     [settings, account] = await Promise.all([getSettings(), getIgAccount()]);
   } catch (e) {
-    console.error("Settings load failed", e);
+    log.error({ err: e }, "Settings load failed");
     return (
       <Card>
         <CardHeader>

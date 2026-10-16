@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { getLogger } from "@/lib/log";
+
+const log = getLogger("instagram");
 
 type FetchFn = typeof fetch;
 
@@ -20,6 +23,7 @@ function graph(cfg: Pick<IgConfig, "apiVersion">, path: string) {
 
 async function parse<T extends z.ZodType>(res: Response, schema: T, what: string): Promise<z.infer<T>> {
   const body: unknown = await res.json().catch(() => null);
+  log.debug({ what, status: res.status }, "instagram response");
   if (!res.ok) {
     const err = z
       .object({ error: z.object({ message: z.string() }).optional(), error_message: z.string().optional() })

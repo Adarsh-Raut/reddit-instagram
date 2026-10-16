@@ -4,6 +4,7 @@ import {
   listApprovedUnscheduledIds,
   occupiedTimes,
 } from "@/db/queries";
+import { recordActivity } from "@/lib/activity";
 import { assignSlots } from "./slots";
 
 export type ScheduleResult = { ok: boolean; message: string; scheduled: number };
@@ -32,6 +33,12 @@ export async function scheduleApprovedPosts(days: number, now: Date = new Date()
   await insertSchedule(times.map((scheduledAt, i) => ({ scrapedPostId: postIds[i], scheduledAt })));
 
   const left = postIds.length - times.length;
+  await recordActivity({
+    level: "info",
+    kind: "schedule.created",
+    message: `Scheduled ${times.length} post${times.length === 1 ? "" : "s"}, ${times[0].toISOString()} to ${times[times.length - 1].toISOString()}`,
+    meta: { count: times.length, leftUnscheduled: left, days },
+  });
   return {
     ok: true,
     scheduled: times.length,

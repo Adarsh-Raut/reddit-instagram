@@ -4,8 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { setPostStatus, unschedulePendingForPost } from "@/db/queries";
 import { requireAdmin } from "@/lib/auth/session";
+import { getLogger } from "@/lib/log";
 import { autoScheduleIfEnabled } from "@/lib/schedule/service";
 import { runScrape } from "@/lib/reddit/run";
+
+const log = getLogger("actions");
 
 export type ScrapeState = { message: string; ok: boolean } | null;
 
@@ -42,7 +45,7 @@ export async function reviewPost(formData: FormData) {
     try {
       await autoScheduleIfEnabled();
     } catch (e) {
-      console.error("auto-schedule failed", e); // the post stays approved; the user can schedule manually
+      log.error({ err: e }, "auto-schedule failed"); // the post stays approved; the user can schedule manually
     }
   }
   revalidatePath("/", "layout");

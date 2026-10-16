@@ -10,10 +10,14 @@ import {
   unschedule,
   updateScheduleCaption,
 } from "@/db/queries";
+import { recordActivity } from "@/lib/activity";
 import { requireAdmin } from "@/lib/auth/session";
+import { getLogger } from "@/lib/log";
 import { parseLocalDateTime } from "@/lib/schedule/local-time";
 import { scheduleApprovedPosts } from "@/lib/schedule/service";
 import { settingsInput } from "@/lib/settings";
+
+const log = getLogger("actions");
 
 export type ActionState = { ok: boolean; message: string } | null;
 
@@ -32,7 +36,7 @@ export async function scheduleApproved(
     revalidatePath("/", "layout");
     return { ok: r.ok, message: r.message };
   } catch (e) {
-    console.error("scheduleApproved failed", e);
+    log.error({ err: e }, "scheduleApproved failed");
     return {
       ok: false,
       message: "Couldn’t schedule. Someone may have taken a slot, so try again.",
@@ -45,6 +49,7 @@ export async function unschedulePost(formData: FormData) {
   const id = z.string().uuid().safeParse(formData.get("id"));
   if (!id.success) return;
   await unschedule(id.data);
+  await recordActivity({ level: "info", kind: "schedule.removed", message: "Removed a post from the schedule", meta: { scheduleId: id.data } });
   revalidatePath("/", "layout");
 }
 
@@ -69,10 +74,11 @@ export async function updateSettings(
   }
   try {
     await saveSettings(parsed.data);
+    await recordActivity({ level: "info", kind: "settings.saved", message: "Settings updated", meta: { autoScrape: parsed.data.autoScrape, autoSchedule: parsed.data.autoSchedule, slots: parsed.data.postSlots, timezone: parsed.data.timezone } });
     revalidatePath("/", "layout");
     return { ok: true, message: "Settings saved." };
   } catch (e) {
-    console.error("updateSettings failed", e);
+    log.error({ err: e }, "updateSettings failed");
     return { ok: false, message: "Couldn’t save settings." };
   }
 }
@@ -112,10 +118,11 @@ export async function editScheduledPost(_prev: ActionState, formData: FormData):
       return { ok: false, message: "This post can’t be moved any more." };
     }
     revalidatePath("/", "layout");
+    await recordActivity({ level: "info", kind: "schedule.edited", message: "Edited a scheduled post", meta: { scheduleId: parsed.data.id, timeChanged, captionChanged: parsed.data.caption !== current.caption } });
     return { ok: true, message: "Saved." };
   } catch (e) {
     // the unique(scheduled_at) constraint: another post already owns that minute
-    console.error("editScheduledPost failed", e);
+    log.error({ err: e }, "editScheduledPost failed");
     return { ok: false, message: "That time slot is already taken by another post." };
   }
 }

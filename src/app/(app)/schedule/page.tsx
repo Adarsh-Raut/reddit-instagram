@@ -2,6 +2,7 @@ import Image from "next/image";
 import { Suspense } from "react";
 import { unschedulePost } from "@/app/actions/schedule";
 import { requireAdmin } from "@/lib/auth/session";
+import { getLogger } from "@/lib/log";
 import { EditScheduleForm } from "@/components/edit-schedule-form";
 import { PublishButton } from "@/components/publish-button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import { buildCaption } from "@/lib/instagram/api";
 import { toLocalInputValue } from "@/lib/schedule/local-time";
 import { dayKey, formatInTimezone } from "@/lib/schedule/slots";
 
+const log = getLogger("pages");
 const STATUS_VARIANT = {
   pending: "secondary",
   publishing: "default",
@@ -27,7 +29,7 @@ async function ScheduleList() {
     timezone = settings.timezone;
     items = await listSchedule();
   } catch (e) {
-    console.error("Schedule load failed", e);
+    log.error({ err: e }, "Schedule load failed");
     return (
       <Card>
         <CardHeader>

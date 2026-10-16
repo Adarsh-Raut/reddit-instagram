@@ -7,10 +7,14 @@ import {
   type IgAccount,
   type PublishClaim,
 } from "@/db/queries";
+import { recordActivity, type ActivityEvent } from "@/lib/activity";
 import { instagramReadyUrl } from "@/lib/cloudinary";
 import { decrypt } from "@/lib/crypto";
+import { getLogger } from "@/lib/log";
 import { buildCaption, publishImage } from "./api";
 import { getIgConfig } from "./config";
+
+const log = getLogger("publish");
 
 export type PublishDeps = {
   claim: (id: string) => Promise<PublishClaim | null>;
@@ -21,6 +25,7 @@ export type PublishDeps = {
   imageUrl: (publicId: string) => string;
   publish: (args: { igUserId: string; token: string; imageUrl: string; caption: string }) => Promise<string>;
   now: () => Date;
+  record: (event: ActivityEvent) => Promise<void>;
 };
 
 export type PublishResult = { ok: true; mediaId: string } | { ok: false; message: string };
@@ -34,6 +39,7 @@ const realDeps = (): PublishDeps => ({
   imageUrl: instagramReadyUrl,
   publish: (args) => publishImage({ apiVersion: getIgConfig()?.apiVersion }, args),
   now: () => new Date(),
+  record: recordActivity,
 });
 
 /**
@@ -45,10 +51,16 @@ export async function publishScheduledPost(
   deps: PublishDeps = realDeps(),
 ): Promise<PublishResult> {
   const claim = await deps.claim(scheduleId);
-  if (!claim) return { ok: false, message: "Already publishing or posted." };
+  if (!claim) {
+    log.debug({ scheduleId }, "skipped: already claimed or posted");
+    return { ok: false, message: "Already publishing or posted." };
+  }
+  const meta = { scheduleId, redditId: claim.post.redditId, title: claim.post.title };
+  log.debug(meta, "claimed for publishing");
 
   const fail = async (message: string): Promise<PublishResult> => {
     await deps.markFailed(scheduleId, message);
+    await deps.record({ level: "error", kind: "publish.failed", message: `Publishing failed: ${message}`, meta });
     return { ok: false, message };
   };
 
@@ -68,8 +80,15 @@ export async function publishScheduledPost(
       await deps.markPosted(scheduleId, claim.postId, mediaId);
     } catch (e) {
       // Instagram has the post; never leave it publishable again.
-      console.error(`Published ${mediaId} but failed to record it for ${scheduleId}`, e);
+      log.error({ err: e, ...meta, mediaId }, "published but failed to record it");
+      await deps.record({
+        level: "error",
+        kind: "publish.record_failed",
+        message: `Posted to Instagram (media ${mediaId}) but couldn’t save that in the database. Do not retry.`,
+        meta,
+      });
     }
+    await deps.record({ level: "info", kind: "publish.posted", message: `Posted “${claim.post.title}” to Instagram`, meta: { ...meta, mediaId } });
     return { ok: true, mediaId };
   } catch (e) {
     return await fail(e instanceof Error ? e.message : "Publishing failed");

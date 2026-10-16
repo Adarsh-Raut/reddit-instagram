@@ -26,6 +26,7 @@ function deps(over: Partial<PublishDeps> = {}): PublishDeps {
     imageUrl: (id) => `https://cdn/${id}.jpg`,
     publish: vi.fn().mockResolvedValue("MEDIA1"),
     now: () => new Date("2026-10-16"),
+    record: vi.fn().mockResolvedValue(undefined),
     ...over,
   };
 }
@@ -43,6 +44,9 @@ describe("publishScheduledPost", () => {
     });
     expect(d.markPosted).toHaveBeenCalledWith("s1", "p1", "MEDIA1");
     expect(d.markFailed).not.toHaveBeenCalled();
+    expect(d.record).toHaveBeenCalledWith(
+      expect.objectContaining({ level: "info", kind: "publish.posted", meta: expect.objectContaining({ mediaId: "MEDIA1", redditId: "r1" }) }),
+    );
   });
 
   it("uses a stored caption when present", async () => {
@@ -57,6 +61,7 @@ describe("publishScheduledPost", () => {
     expect(r.ok).toBe(false);
     expect(d.publish).not.toHaveBeenCalled();
     expect(d.markFailed).not.toHaveBeenCalled();
+    expect(d.record).not.toHaveBeenCalled();
   });
 
   it("fails cleanly when Instagram isn't connected", async () => {
@@ -80,13 +85,17 @@ describe("publishScheduledPost", () => {
     expect(r).toEqual({ ok: false, message: "Media URL unreachable" });
     expect(d.markFailed).toHaveBeenCalledWith("s1", "Media URL unreachable");
     expect(d.markPosted).not.toHaveBeenCalled();
+    expect(d.record).toHaveBeenCalledWith(
+      expect.objectContaining({ level: "error", kind: "publish.failed", message: expect.stringContaining("Media URL unreachable") }),
+    );
+    expect(d.record).not.toHaveBeenCalledWith(expect.objectContaining({ kind: "publish.posted" }));
   });
 
   it("still reports success if recording the post fails after Instagram accepted it", async () => {
     const d = deps({ markPosted: vi.fn().mockRejectedValue(new Error("db down")) });
-    vi.spyOn(console, "error").mockImplementation(() => {});
     const r = await publishScheduledPost("s1", d);
     expect(r).toEqual({ ok: true, mediaId: "MEDIA1" });
     expect(d.markFailed).not.toHaveBeenCalled(); // must not become retryable
+    expect(d.record).toHaveBeenCalledWith(expect.objectContaining({ level: "error", kind: "publish.record_failed" }));
   });
 });

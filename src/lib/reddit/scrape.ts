@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
+import { getLogger } from "@/lib/log";
 import type { RedditImagePost } from "./client";
+
+const log = getLogger("scrape");
 
 export type NewScrapedPost = {
   redditId: string;
@@ -50,6 +53,7 @@ export async function scrapeMemes(
     try {
       candidates.push(...(await deps.fetchSubreddit(sub, perSub)));
     } catch (e) {
+      log.warn({ err: e, subreddit: sub }, "could not fetch subreddit");
       result.errors.push(e instanceof Error ? e.message : String(e));
     }
   }
@@ -86,6 +90,7 @@ export async function scrapeMemes(
       });
       result.added++;
     } catch (e) {
+      log.warn({ err: e, redditId: post.redditId }, "could not import meme");
       result.errors.push(
         `${post.redditId}: ${e instanceof Error ? e.message : String(e)}`,
       );

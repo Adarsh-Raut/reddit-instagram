@@ -4,6 +4,7 @@ import {
   hashExists,
   insertScrapedPost,
 } from "@/db/queries";
+import { recordActivity } from "@/lib/activity";
 import { uploadRemoteImage } from "@/lib/cloudinary";
 import { getEnv } from "@/lib/env";
 import { fetchSubredditImages, getAccessToken } from "./client";
@@ -21,7 +22,7 @@ export async function runScrape(): Promise<ScrapeResult> {
     userAgent: env.REDDIT_USER_AGENT,
   });
 
-  return scrapeMemes(subreddits, scrapeCount, {
+  const result = await scrapeMemes(subreddits, scrapeCount, {
     fetchSubreddit: (sub, limit) =>
       fetchSubredditImages(sub, limit, token, env.REDDIT_USER_AGENT),
     existingRedditIds,
@@ -36,4 +37,14 @@ export async function runScrape(): Promise<ScrapeResult> {
     upload: uploadRemoteImage,
     insert: insertScrapedPost,
   });
+
+  await recordActivity({
+    level: result.errors.length > 0 ? "warn" : "info",
+    kind: "scrape.completed",
+    message:
+      `Scrape finished: ${result.added} new, ${result.skippedDuplicates} duplicates skipped` +
+      (result.errors.length ? `, ${result.errors.length} errors` : ""),
+    meta: { subreddits, requested: scrapeCount, added: result.added, duplicates: result.skippedDuplicates, errors: result.errors.slice(0, 5) },
+  });
+  return result;
 }

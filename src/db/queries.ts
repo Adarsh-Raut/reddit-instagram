@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { getDb } from "./index";
-import { igAccounts, scheduledPosts, scrapedPosts, settings } from "./schema";
+import { activityLog, igAccounts, scheduledPosts, scrapedPosts, settings } from "./schema";
 
 export type ScrapedPost = typeof scrapedPosts.$inferSelect;
 export type PostStatus = ScrapedPost["status"];
@@ -331,4 +331,46 @@ export async function listStaleRejected(before: Date, limit: number) {
 /** Keep the row (its reddit id and image hash still prevent re-scraping) but drop the image. */
 export async function clearImage(id: string) {
   await getDb().update(scrapedPosts).set({ cloudinaryUrl: "" }).where(eq(scrapedPosts.id, id));
+}
+
+export type ActivityRow = typeof activityLog.$inferSelect;
+export const ACTIVITY_PAGE_SIZE = 50;
+
+export async function insertActivity(e: {
+  level: string;
+  kind: string;
+  message: string;
+  meta?: unknown;
+}) {
+  await getDb()
+    .insert(activityLog)
+    .values({ level: e.level, kind: e.kind, message: e.message, meta: e.meta ?? null });
+}
+
+const problemsOnly = inArray(activityLog.level, ["warn", "error"]);
+
+export async function listActivity(page = 1, onlyProblems = false): Promise<ActivityRow[]> {
+  return getDb()
+    .select()
+    .from(activityLog)
+    .where(onlyProblems ? problemsOnly : undefined)
+    .orderBy(desc(activityLog.at), desc(activityLog.id))
+    .limit(ACTIVITY_PAGE_SIZE)
+    .offset((Math.max(1, page) - 1) * ACTIVITY_PAGE_SIZE);
+}
+
+export async function countActivity(onlyProblems = false): Promise<number> {
+  const [row] = await getDb()
+    .select({ n: sql<number>`count(*)::int` })
+    .from(activityLog)
+    .where(onlyProblems ? problemsOnly : undefined);
+  return row.n;
+}
+
+export async function pruneActivity(before: Date): Promise<number> {
+  const rows = await getDb()
+    .delete(activityLog)
+    .where(lt(activityLog.at, before))
+    .returning({ id: activityLog.id });
+  return rows.length;
 }

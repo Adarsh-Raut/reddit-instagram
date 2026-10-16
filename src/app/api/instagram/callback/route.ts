@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { saveIgAccount } from "@/db/queries";
+import { recordActivity } from "@/lib/activity";
 import { requireAdmin } from "@/lib/auth/session";
 import { encrypt } from "@/lib/crypto";
 import { exchangeCode, getProfile, toLongLived } from "@/lib/instagram/api";
@@ -26,7 +27,10 @@ export async function GET(request: Request) {
 
   const expected = (await cookies()).get("ig_oauth_state")?.value;
   if (!sameState(expected, url.searchParams.get("state"))) return back("bad-state");
-  if (url.searchParams.get("error")) return back("denied");
+  if (url.searchParams.get("error")) {
+    await recordActivity({ level: "warn", kind: "instagram.denied", message: "Instagram login was cancelled or denied", meta: { reason: url.searchParams.get("error_reason") } });
+    return back("denied");
+  }
   const code = url.searchParams.get("code");
   if (!code) return back("error");
 
@@ -40,9 +44,10 @@ export async function GET(request: Request) {
       encryptedToken: encrypt(long.accessToken),
       tokenExpiresAt: new Date(Date.now() + long.expiresInSeconds * 1000),
     });
+    await recordActivity({ level: "info", kind: "instagram.connected", message: `Connected Instagram @${profile.username ?? profile.userId}`, meta: { igUserId: profile.userId } });
     return back("connected");
   } catch (e) {
-    console.error("Instagram connect failed", e);
+    await recordActivity({ level: "error", kind: "instagram.connect_failed", message: `Instagram connect failed: ${e instanceof Error ? e.message : String(e)}` });
     return back("error");
   }
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/session";
+import { getLogger } from "@/lib/log";
 import { PostGrid } from "@/components/post-grid";
 import { ScrapeButton } from "@/components/scrape-button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { ScheduleForm } from "@/components/schedule-form";
 import { Pagination } from "@/components/pagination";
 import { countByStatus, getSettings, listPosts, PAGE_SIZE, type PostStatus } from "@/db/queries";
 
+const log = getLogger("pages");
 const TABS: { status: PostStatus; label: string }[] = [
   { status: "new", label: "New" },
   { status: "approved", label: "Approved" },
@@ -38,7 +40,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
     const page = Math.min(requestedPage, totalPages);
     data = { posts: await listPosts(status, page), counts, timezone: settings.timezone, page, totalPages };
   } catch (e) {
-    console.error("Dashboard data load failed", e);
+    log.error({ err: e }, "Dashboard data load failed");
     return (
       <Card>
         <CardHeader>
