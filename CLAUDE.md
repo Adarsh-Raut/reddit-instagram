@@ -31,7 +31,7 @@ Out of scope for now: AI captions and hashtags (planned later), video/Reels.
 
 - Next.js (App Router) + TypeScript
 - Tailwind CSS + shadcn/ui
-- Neon Postgres, with Drizzle ORM
+- Postgres with Drizzle ORM: Neon in production, local Docker container in dev (driver is picked from the `DATABASE_URL` host in `src/db/index.ts`)
 - Cloudinary for image storage (Instagram needs a public JPEG URL)
 - Inngest for scheduling and background jobs (Vercel free-tier cron is daily only)
 - Hosting: Vercel
@@ -78,6 +78,7 @@ Create a media container (image URL + caption) → poll its status until ready �
 
 - `npm run dev` — dev server (set `INNGEST_DEV=1`; run `npx inngest-cli@latest dev` for the Inngest UI)
 - `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`
+- `docker compose up -d db` — project-only Postgres on `127.0.0.1:5433` (container `reddit_instagram_postgres`, own volume). Do not touch other projects' containers (`atlas_*`, `sendify_*`) or port 5432. Dev URL is in `.env.local`.
 - `npm run db:generate` / `db:push` — Drizzle migrations (needs `DATABASE_URL` in `.env.local`)
 - Package manager is npm (the local pnpm/corepack is broken).
 - Next.js here is a newer version than usual; read `node_modules/next/dist/docs/` before using unfamiliar APIs (see AGENTS.md).

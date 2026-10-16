@@ -1,0 +1,25 @@
+# Local dev database for this project only.
+# Start: docker compose up -d db   (listens on 127.0.0.1:5433)
+name: reddit-instagram
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: reddit_instagram_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: reddit_ig
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reddit_ig_dev}
+      POSTGRES_DB: reddit_instagram
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - reddit_instagram_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reddit_ig -d reddit_instagram"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  reddit_instagram_pgdata:
