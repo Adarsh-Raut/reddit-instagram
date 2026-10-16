@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { logout } from "@/app/actions/auth";
 
 const links = [
   { href: "/", label: "Dashboard" },
@@ -16,6 +17,11 @@ export function SiteNav() {
             {l.label}
           </Link>
         ))}
+        <form action={logout} className="ml-auto">
+          <button type="submit" className="text-muted-foreground hover:text-foreground">
+            Sign out
+          </button>
+        </form>
       </div>
     </nav>
   );

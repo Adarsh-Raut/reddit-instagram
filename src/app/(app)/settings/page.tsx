@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { requireAdmin } from "@/lib/auth/session";
 import { InstagramCard } from "@/components/instagram-card";
 import { SettingsForm } from "@/components/settings-form";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +7,7 @@ import { getIgAccount, getSettings } from "@/db/queries";
 import { daysUntil } from "@/lib/instagram/token";
 
 async function Content({ searchParams }: { searchParams: PageProps<"/settings">["searchParams"] }) {
+  await requireAdmin();
   const ig = (await searchParams).ig;
   let settings, account;
   try {

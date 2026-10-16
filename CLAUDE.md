@@ -38,7 +38,8 @@ Out of scope for now: AI captions and hashtags (planned later), video/Reels.
 
 ## Auth
 
-- Dashboard login: Auth.js or Better Auth, kept separate from Instagram.
+- Dashboard login: single admin password. `npm run admin:setup` prompts for it (hidden) and writes `ADMIN_PASSWORD_HASH` (scrypt) and `SESSION_SECRET` to `.env.local`. Sessions are HMAC-signed 7-day cookies (`src/lib/auth`). Kept separate from Instagram.
+- **Every server action, route handler and data-reading page component must call `await requireAdmin()` first (and never inside a try/catch, since redirect() throws).** `src/proxy.ts` is only an optimistic first gate. Only `/login` and `/api/inngest` (Inngest signing key) are public. If the secret/hash are missing, everything stays locked (fail closed).
 - Instagram connection: Instagram API with Instagram Login (no Facebook Page needed). Requires a Business or Creator account. The Meta app stays in development mode while it is single-user.
 - Store IG tokens encrypted. Long-lived tokens last about 60 days, so a refresh job is required.
 
@@ -94,10 +95,10 @@ Create a media container (image URL + caption) → poll its status until ready �
 - `src/db` — Drizzle schema and lazy Neon client; migrations in `drizzle/`
 - `src/lib` — env validation, Cloudinary helpers
 - `src/lib/reddit` — Reddit OAuth client, image filtering, scrape service (`scrape.ts` is pure, dependency-injected and unit-tested; `run.ts` wires real services)
-- `src/app/actions` — server actions (scrape, approve/reject). **No auth yet; add before deploying.**
+- `src/app/actions` — server actions (scrape, approve/reject, schedule, settings, publish, login/logout), all behind `requireAdmin()`
 - `src/lib/schedule` — `assignSlots` (pure, timezone/DST-aware slot assignment), formatting helpers
 - `src/db/queries.ts` — all DB access; `queries.test.ts` runs them against in-memory PGlite using the real migration
-- Pages: `/` dashboard (tabs; Approved tab has the schedule form), `/schedule`, `/settings`
+- Pages (in the `(app)` route group, which adds the nav): `/` dashboard (tabs; Approved tab has the schedule form), `/schedule`, `/settings`
 - `src/lib/instagram` — Instagram Login API client (`api.ts`), publish service (`publish.ts`, claims a row atomically so a post is never published twice), config. OAuth routes in `src/app/api/instagram/{connect,callback}`. Tokens are AES-GCM encrypted (`src/lib/crypto.ts`, needs `TOKEN_ENCRYPTION_KEY`).
 - `src/inngest` — client, functions, and job logic (`jobs.ts`, dependency-injected and tested). Served at `/api/inngest`.
   - `publish-due-posts` runs every 5 min: publishes at most ONE due post per run (spaces out catch-up posts), and marks posts more than 6h late as `failed` ("Missed its time slot") instead of posting them late. Failed posts are never auto-retried (avoids double posts); the user clicks Retry.

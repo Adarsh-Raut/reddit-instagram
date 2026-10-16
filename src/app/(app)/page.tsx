@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { requireAdmin } from "@/lib/auth/session";
 import { PostGrid } from "@/components/post-grid";
 import { ScrapeButton } from "@/components/scrape-button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,7 @@ function parseStatus(value: string | string[] | undefined): PostStatus {
 }
 
 async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
+  await requireAdmin();
   const status = parseStatus((await searchParams).status);
 
   let data;

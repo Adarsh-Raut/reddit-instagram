@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Suspense } from "react";
 import { unschedulePost } from "@/app/actions/schedule";
+import { requireAdmin } from "@/lib/auth/session";
 import { PublishButton } from "@/components/publish-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ const STATUS_VARIANT = {
 } as const;
 
 async function ScheduleList() {
+  await requireAdmin();
   let items, timezone;
   try {
     const settings = await getSettings();

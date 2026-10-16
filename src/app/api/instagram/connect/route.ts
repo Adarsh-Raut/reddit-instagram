@@ -1,10 +1,12 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth/session";
 import { buildAuthUrl } from "@/lib/instagram/api";
 import { getIgConfig } from "@/lib/instagram/config";
 import { newOAuthState } from "@/lib/instagram/publish";
 
 export async function GET(request: Request) {
+  await requireAdmin();
   const cfg = getIgConfig();
   if (!cfg) return NextResponse.redirect(new URL("/settings?ig=not-configured", request.url));
 

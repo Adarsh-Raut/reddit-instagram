@@ -10,10 +10,9 @@ import {
   saveSettings,
   unschedule,
 } from "@/db/queries";
+import { requireAdmin } from "@/lib/auth/session";
 import { assignSlots } from "@/lib/schedule/slots";
 import { settingsInput } from "@/lib/settings";
-
-// TODO(auth): same as actions/posts.ts, verify an authenticated admin before deploying.
 
 export type ActionState = { ok: boolean; message: string } | null;
 
@@ -27,6 +26,7 @@ export async function scheduleApproved(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  await requireAdmin();
   const days = daysSchema.safeParse(formData.get("days"));
   if (!days.success) return { ok: false, message: "Days must be between 1 and 90." };
 
@@ -68,6 +68,7 @@ export async function scheduleApproved(
 }
 
 export async function unschedulePost(formData: FormData) {
+  await requireAdmin();
   const id = z.string().uuid().safeParse(formData.get("id"));
   if (!id.success) return;
   await unschedule(id.data);
@@ -80,6 +81,7 @@ export async function updateSettings(
   _prev: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
+  await requireAdmin();
   const parsed = settingsInput.safeParse({
     subreddits: formData.get("subreddits"),
     scrapeCount: formData.get("scrapeCount"),

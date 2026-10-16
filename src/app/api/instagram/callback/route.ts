@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { saveIgAccount } from "@/db/queries";
+import { requireAdmin } from "@/lib/auth/session";
 import { encrypt } from "@/lib/crypto";
 import { exchangeCode, getProfile, toLongLived } from "@/lib/instagram/api";
 import { getIgConfig } from "@/lib/instagram/config";
@@ -12,6 +13,7 @@ function sameState(a: string | undefined, b: string | null) {
 }
 
 export async function GET(request: Request) {
+  await requireAdmin();
   const url = new URL(request.url);
   const back = (result: string) => {
     const res = NextResponse.redirect(new URL(`/settings?ig=${result}`, request.url));

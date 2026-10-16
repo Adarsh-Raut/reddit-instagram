@@ -3,14 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { setPostStatus, unschedulePendingForPost } from "@/db/queries";
+import { requireAdmin } from "@/lib/auth/session";
 import { runScrape } from "@/lib/reddit/run";
-
-// TODO(auth): dashboard auth is not built yet. Before deploying, every action
-// here must verify an authenticated admin (see CLAUDE.md build order).
 
 export type ScrapeState = { message: string; ok: boolean } | null;
 
 export async function scrapeNow(): Promise<ScrapeState> {
+  await requireAdmin();
   try {
     const r = await runScrape();
     revalidatePath("/");
@@ -29,6 +28,7 @@ const reviewSchema = z.object({
 });
 
 export async function reviewPost(formData: FormData) {
+  await requireAdmin();
   const parsed = reviewSchema.safeParse({
     id: formData.get("id"),
     status: formData.get("status"),
