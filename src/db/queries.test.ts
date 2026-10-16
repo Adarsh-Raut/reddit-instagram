@@ -6,6 +6,8 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { setDbForTests } from "./index";
 import {
   claimForPublishing,
+  failMissed,
+  listDueScheduleIds,
   deleteIgAccounts,
   getIgAccount,
   getSettings,
@@ -193,5 +195,47 @@ describe("publishing state", () => {
     expect((await getIgAccount())?.encryptedToken).toBe("t2");
     await deleteIgAccounts();
     expect(await getIgAccount()).toBeNull();
+  });
+});
+
+describe("due and missed posts", () => {
+  const at = (iso: string) => new Date(iso);
+
+  async function seed(times: string[]) {
+    for (let i = 0; i < times.length; i++) await insertScrapedPost(post(i + 1));
+    const rows = [];
+    for (let i = 0; i < times.length; i++) {
+      rows.push({ scrapedPostId: await idOf(`r${i + 1}`), scheduledAt: at(times[i]) });
+    }
+    await insertSchedule(rows);
+  }
+
+  it("returns only pending posts that are due and not too late, oldest first, honouring the limit", async () => {
+    await seed(["2026-10-16T05:00:00Z", "2026-10-16T09:00:00Z", "2026-10-16T10:00:00Z", "2026-10-16T13:00:00Z"]);
+    const now = at("2026-10-16T12:00:00Z");
+    const notBefore = at("2026-10-16T06:00:00Z");
+    const ids = await listDueScheduleIds(now, notBefore, 5);
+    const rows = await db.select().from(schema.scheduledPosts);
+    const timeOf = (id: string) => rows.find((r) => r.id === id)!.scheduledAt.toISOString();
+    expect(ids.map(timeOf)).toEqual(["2026-10-16T09:00:00.000Z", "2026-10-16T10:00:00.000Z"]);
+    expect(await listDueScheduleIds(now, notBefore, 1)).toHaveLength(1);
+  });
+
+  it("failMissed flags only old pending posts and leaves others untouched", async () => {
+    await seed(["2026-10-16T05:00:00Z", "2026-10-16T09:00:00Z"]);
+    expect(await failMissed(at("2026-10-16T06:00:00Z"))).toBe(1);
+    const rows = await db.select().from(schema.scheduledPosts);
+    const old = rows.find((r) => r.scheduledAt.toISOString() === "2026-10-16T05:00:00.000Z")!;
+    const recent = rows.find((r) => r.scheduledAt.toISOString() === "2026-10-16T09:00:00.000Z")!;
+    expect(old).toMatchObject({ status: "failed", error: expect.stringMatching(/Missed/) });
+    expect(recent.status).toBe("pending");
+    expect(await failMissed(at("2026-10-16T06:00:00Z"))).toBe(0);
+  });
+
+  it("skips posts that are already publishing", async () => {
+    await seed(["2026-10-16T09:00:00Z"]);
+    const [row] = await db.select().from(schema.scheduledPosts);
+    await claimForPublishing(row.id);
+    expect(await listDueScheduleIds(at("2026-10-16T12:00:00Z"), at("2026-10-16T00:00:00Z"), 5)).toEqual([]);
   });
 });

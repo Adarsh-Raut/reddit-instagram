@@ -57,7 +57,7 @@ Create a media container (image URL + caption) → poll its status until ready �
 
 - Needs a Meta developer app with the Instagram product; set `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `APP_URL` and add `APP_URL/api/instagram/callback` as an OAuth redirect URI. Meta may require HTTPS there; if localhost is rejected, use a tunnel and set `APP_URL` to it.
 - Never publish to the real account from tests or scripts; tests mock `fetch`. Only the user's click on "Publish now" posts for real.
-- Long-lived tokens last ~60 days; the refresh job (`refreshLongLived` exists) is not wired up yet.
+- Long-lived tokens last ~60 days; a daily Inngest job refreshes them when under 15 days remain. An expired token can't be refreshed, so the user must reconnect.
 
 ## Known risks and rules
 
@@ -99,5 +99,8 @@ Create a media container (image URL + caption) → poll its status until ready �
 - `src/db/queries.ts` — all DB access; `queries.test.ts` runs them against in-memory PGlite using the real migration
 - Pages: `/` dashboard (tabs; Approved tab has the schedule form), `/schedule`, `/settings`
 - `src/lib/instagram` — Instagram Login API client (`api.ts`), publish service (`publish.ts`, claims a row atomically so a post is never published twice), config. OAuth routes in `src/app/api/instagram/{connect,callback}`. Tokens are AES-GCM encrypted (`src/lib/crypto.ts`, needs `TOKEN_ENCRYPTION_KEY`).
-- `src/inngest` — client and background functions, served at `/api/inngest`
+- `src/inngest` — client, functions, and job logic (`jobs.ts`, dependency-injected and tested). Served at `/api/inngest`.
+  - `publish-due-posts` runs every 5 min: publishes at most ONE due post per run (spaces out catch-up posts), and marks posts more than 6h late as `failed` ("Missed its time slot") instead of posting them late. Failed posts are never auto-retried (avoids double posts); the user clicks Retry.
+  - `refresh-instagram-token` runs daily at 03:00 UTC.
+  - To test locally: `INNGEST_DEV=1 npm run dev`, then `npx inngest-cli@latest dev -u http://localhost:3000/api/inngest`, and `curl -X PUT localhost:3000/api/inngest` to sync.
 - `src/components/ui` — shadcn components

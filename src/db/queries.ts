@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import { igAccounts, scheduledPosts, scrapedPosts, settings } from "./schema";
 
@@ -195,6 +195,36 @@ export async function markPosted(scheduleId: string, postId: string, igMediaId: 
     .set({ status: "posted", igMediaId, error: null })
     .where(eq(scheduledPosts.id, scheduleId));
   await db.update(scrapedPosts).set({ status: "posted" }).where(eq(scrapedPosts.id, postId));
+}
+
+/** Oldest pending posts whose time has come and that aren't too late to publish. */
+export async function listDueScheduleIds(now: Date, notBefore: Date, limit: number): Promise<string[]> {
+  const rows = await getDb()
+    .select({ id: scheduledPosts.id })
+    .from(scheduledPosts)
+    .where(
+      and(
+        eq(scheduledPosts.status, "pending"),
+        lte(scheduledPosts.scheduledAt, now),
+        gte(scheduledPosts.scheduledAt, notBefore),
+      ),
+    )
+    .orderBy(asc(scheduledPosts.scheduledAt))
+    .limit(limit);
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Pending posts that missed their slot by too long (e.g. the server was offline)
+ * become "failed" so a human decides whether to post them late. Returns the count.
+ */
+export async function failMissed(before: Date): Promise<number> {
+  const rows = await getDb()
+    .update(scheduledPosts)
+    .set({ status: "failed", error: "Missed its time slot. Use Retry to post it now." })
+    .where(and(eq(scheduledPosts.status, "pending"), lt(scheduledPosts.scheduledAt, before)))
+    .returning({ id: scheduledPosts.id });
+  return rows.length;
 }
 
 export async function markFailed(scheduleId: string, error: string) {
