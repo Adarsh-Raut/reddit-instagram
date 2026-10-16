@@ -53,6 +53,12 @@ Out of scope for now: AI captions and hashtags (planned later), video/Reels.
 
 Create a media container (image URL + caption) → poll its status until ready → call `media_publish`. Images must be JPEG with aspect ratio between 4:5 and 1.91:1; use Cloudinary transforms to convert and pad.
 
+## Instagram notes
+
+- Needs a Meta developer app with the Instagram product; set `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `APP_URL` and add `APP_URL/api/instagram/callback` as an OAuth redirect URI. Meta may require HTTPS there; if localhost is rejected, use a tunnel and set `APP_URL` to it.
+- Never publish to the real account from tests or scripts; tests mock `fetch`. Only the user's click on "Publish now" posts for real.
+- Long-lived tokens last ~60 days; the refresh job (`refreshLongLived` exists) is not wired up yet.
+
 ## Known risks and rules
 
 - Reddit API needs OAuth app registration; unauthenticated scraping gets blocked from cloud IPs. Only scrape image posts.
@@ -92,5 +98,6 @@ Create a media container (image URL + caption) → poll its status until ready �
 - `src/lib/schedule` — `assignSlots` (pure, timezone/DST-aware slot assignment), formatting helpers
 - `src/db/queries.ts` — all DB access; `queries.test.ts` runs them against in-memory PGlite using the real migration
 - Pages: `/` dashboard (tabs; Approved tab has the schedule form), `/schedule`, `/settings`
+- `src/lib/instagram` — Instagram Login API client (`api.ts`), publish service (`publish.ts`, claims a row atomically so a post is never published twice), config. OAuth routes in `src/app/api/instagram/{connect,callback}`. Tokens are AES-GCM encrypted (`src/lib/crypto.ts`, needs `TOKEN_ENCRYPTION_KEY`).
 - `src/inngest` — client and background functions, served at `/api/inngest`
 - `src/components/ui` — shadcn components

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Suspense } from "react";
 import { unschedulePost } from "@/app/actions/schedule";
+import { PublishButton } from "@/components/publish-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +67,9 @@ async function ScheduleList() {
                   {it.error && <p className="truncate text-xs text-destructive">{it.error}</p>}
                 </div>
                 <Badge variant={STATUS_VARIANT[it.status]}>{it.status}</Badge>
+                {(it.status === "pending" || it.status === "failed") && (
+                  <PublishButton id={it.id} retry={it.status === "failed"} />
+                )}
                 {it.status === "pending" && (
                   <form action={unschedulePost}>
                     <input type="hidden" name="id" value={it.id} />

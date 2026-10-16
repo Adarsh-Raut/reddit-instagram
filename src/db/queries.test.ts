@@ -5,7 +5,13 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { setDbForTests } from "./index";
 import {
+  claimForPublishing,
+  deleteIgAccounts,
+  getIgAccount,
   getSettings,
+  markFailed,
+  markPosted,
+  saveIgAccount,
   insertSchedule,
   insertScrapedPost,
   listApprovedUnscheduledIds,
@@ -136,5 +142,56 @@ describe("scheduling queries", () => {
     await insertSchedule([{ scrapedPostId: id, scheduledAt: new Date("2030-01-01T10:00:00Z") }]);
     await unschedulePendingForPost(id);
     expect(await db.select().from(schema.scheduledPosts)).toHaveLength(0);
+  });
+});
+
+describe("publishing state", () => {
+  async function scheduled() {
+    await insertScrapedPost(post(1));
+    const postId = await idOf("r1");
+    await setPostStatus(postId, "approved");
+    await insertSchedule([{ scrapedPostId: postId, scheduledAt: new Date("2030-01-01T10:00:00Z") }]);
+    const [row] = await db.select().from(schema.scheduledPosts);
+    return { postId, scheduleId: row.id };
+  }
+
+  it("lets only one caller claim a pending post", async () => {
+    const { scheduleId } = await scheduled();
+    const [a, b] = await Promise.all([claimForPublishing(scheduleId), claimForPublishing(scheduleId)]);
+    expect([a, b].filter(Boolean)).toHaveLength(1);
+    const [row] = await db.select().from(schema.scheduledPosts);
+    expect(row.status).toBe("publishing");
+    expect(row.attempts).toBe(1);
+  });
+
+  it("markPosted updates both the schedule and the post; posted can't be claimed again", async () => {
+    const { scheduleId, postId } = await scheduled();
+    await claimForPublishing(scheduleId);
+    await markPosted(scheduleId, postId, "M1");
+    const [s] = await db.select().from(schema.scheduledPosts);
+    const [p] = await db.select().from(schema.scrapedPosts);
+    expect(s).toMatchObject({ status: "posted", igMediaId: "M1" });
+    expect(p.status).toBe("posted");
+    expect(await claimForPublishing(scheduleId)).toBeNull();
+  });
+
+  it("a failed post can be claimed again and counts attempts", async () => {
+    const { scheduleId } = await scheduled();
+    await claimForPublishing(scheduleId);
+    await markFailed(scheduleId, "boom");
+    expect((await db.select().from(schema.scheduledPosts))[0]).toMatchObject({ status: "failed", error: "boom" });
+    expect(await claimForPublishing(scheduleId)).not.toBeNull();
+    expect((await db.select().from(schema.scheduledPosts))[0]).toMatchObject({ status: "publishing", attempts: 2, error: null });
+  });
+
+  it("stores one Instagram account, updating it on reconnect", async () => {
+    await db.delete(schema.igAccounts);
+    const base = { igUserId: "1", username: "a", encryptedToken: "t1", tokenExpiresAt: new Date("2030-01-01") };
+    await saveIgAccount(base);
+    await saveIgAccount({ ...base, encryptedToken: "t2" });
+    expect(await db.select().from(schema.igAccounts)).toHaveLength(1);
+    expect((await getIgAccount())?.encryptedToken).toBe("t2");
+    await deleteIgAccounts();
+    expect(await getIgAccount()).toBeNull();
   });
 });

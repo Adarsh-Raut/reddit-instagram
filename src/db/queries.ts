@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "./index";
-import { scheduledPosts, scrapedPosts, settings } from "./schema";
+import { igAccounts, scheduledPosts, scrapedPosts, settings } from "./schema";
 
 export type ScrapedPost = typeof scrapedPosts.$inferSelect;
 export type PostStatus = ScrapedPost["status"];
@@ -136,4 +136,70 @@ export async function hashExists(hash: string): Promise<boolean> {
 
 export async function insertScrapedPost(post: typeof scrapedPosts.$inferInsert) {
   await getDb().insert(scrapedPosts).values(post);
+}
+
+export type IgAccount = typeof igAccounts.$inferSelect;
+
+/** This app connects a single Instagram account. */
+export async function getIgAccount(): Promise<IgAccount | null> {
+  const [row] = await getDb().select().from(igAccounts).orderBy(desc(igAccounts.createdAt)).limit(1);
+  return row ?? null;
+}
+
+export async function saveIgAccount(a: {
+  igUserId: string;
+  username: string | null;
+  encryptedToken: string;
+  tokenExpiresAt: Date;
+}) {
+  await getDb()
+    .insert(igAccounts)
+    .values(a)
+    .onConflictDoUpdate({
+      target: igAccounts.igUserId,
+      set: { username: a.username, encryptedToken: a.encryptedToken, tokenExpiresAt: a.tokenExpiresAt },
+    });
+}
+
+export async function deleteIgAccounts() {
+  await getDb().delete(igAccounts);
+}
+
+export type PublishClaim = {
+  scheduleId: string;
+  postId: string;
+  caption: string;
+  post: ScrapedPost;
+};
+
+/**
+ * Atomically move a pending/failed schedule to "publishing".
+ * Returns null if it was already claimed or is already posted, which prevents double posts.
+ */
+export async function claimForPublishing(scheduleId: string): Promise<PublishClaim | null> {
+  const db = getDb();
+  const [claimed] = await db
+    .update(scheduledPosts)
+    .set({ status: "publishing", error: null, attempts: sql`${scheduledPosts.attempts} + 1` })
+    .where(and(eq(scheduledPosts.id, scheduleId), inArray(scheduledPosts.status, ["pending", "failed"])))
+    .returning();
+  if (!claimed) return null;
+  const [post] = await db.select().from(scrapedPosts).where(eq(scrapedPosts.id, claimed.scrapedPostId));
+  return { scheduleId: claimed.id, postId: claimed.scrapedPostId, caption: claimed.caption, post };
+}
+
+export async function markPosted(scheduleId: string, postId: string, igMediaId: string) {
+  const db = getDb();
+  await db
+    .update(scheduledPosts)
+    .set({ status: "posted", igMediaId, error: null })
+    .where(eq(scheduledPosts.id, scheduleId));
+  await db.update(scrapedPosts).set({ status: "posted" }).where(eq(scrapedPosts.id, postId));
+}
+
+export async function markFailed(scheduleId: string, error: string) {
+  await getDb()
+    .update(scheduledPosts)
+    .set({ status: "failed", error: error.slice(0, 500) })
+    .where(eq(scheduledPosts.id, scheduleId));
 }
