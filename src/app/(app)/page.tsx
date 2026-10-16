@@ -5,7 +5,8 @@ import { PostGrid } from "@/components/post-grid";
 import { ScrapeButton } from "@/components/scrape-button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScheduleForm } from "@/components/schedule-form";
-import { countByStatus, getSettings, listPosts, type PostStatus } from "@/db/queries";
+import { Pagination } from "@/components/pagination";
+import { countByStatus, getSettings, listPosts, PAGE_SIZE, type PostStatus } from "@/db/queries";
 
 const TABS: { status: PostStatus; label: string }[] = [
   { status: "new", label: "New" },
@@ -19,18 +20,23 @@ function parseStatus(value: string | string[] | undefined): PostStatus {
   return TABS.find((t) => t.status === v)?.status ?? "new";
 }
 
+function parsePage(value: string | string[] | undefined): number {
+  const n = Number(Array.isArray(value) ? value[0] : value);
+  return Number.isInteger(n) && n >= 1 && n <= 10_000 ? n : 1;
+}
+
 async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
   await requireAdmin();
-  const status = parseStatus((await searchParams).status);
+  const params = await searchParams;
+  const status = parseStatus(params.status);
+  const requestedPage = parsePage(params.page);
 
   let data;
   try {
-    const [posts, counts, settings] = await Promise.all([
-      listPosts(status),
-      countByStatus(),
-      getSettings(),
-    ]);
-    data = { posts, counts, timezone: settings.timezone };
+    const [counts, settings] = await Promise.all([countByStatus(), getSettings()]);
+    const totalPages = Math.max(1, Math.ceil(counts[status] / PAGE_SIZE));
+    const page = Math.min(requestedPage, totalPages);
+    data = { posts: await listPosts(status, page), counts, timezone: settings.timezone, page, totalPages };
   } catch (e) {
     console.error("Dashboard data load failed", e);
     return (
@@ -68,6 +74,17 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
         <ScheduleForm unscheduledCount={data.posts.filter((p) => !p.scheduledAt).length} />
       )}
       <PostGrid posts={data.posts} status={status} timezone={data.timezone} />
+      <Pagination
+        page={data.page}
+        totalPages={data.totalPages}
+        hrefFor={(p) => {
+          const q = new URLSearchParams();
+          if (status !== "new") q.set("status", status);
+          if (p > 1) q.set("page", String(p));
+          const qs = q.toString();
+          return qs ? `/?${qs}` : "/";
+        }}
+      />
     </>
   );
 }

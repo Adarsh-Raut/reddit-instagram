@@ -28,6 +28,10 @@ export const settingsInput = z.object({
         .max(12),
     ),
   timezone: z.string().refine(isValidTimezone, "Unknown timezone"),
+  // checkboxes: "on" when ticked, absent when not
+  autoScrape: z.preprocess((v) => v === "on" || v === true, z.boolean()),
+  autoSchedule: z.preprocess((v) => v === "on" || v === true, z.boolean()),
+  autoScheduleDays: z.coerce.number().int().min(1).max(90),
 });
 
 export type SettingsInput = z.infer<typeof settingsInput>;

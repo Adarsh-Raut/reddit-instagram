@@ -1,5 +1,7 @@
 # Reddit → Instagram Meme Automation
 
+> Project status, setup checklist and test plan live in `docs/PROGRESS.md`. Read it first and keep it updated when something significant changes.
+
 A dashboard tool that scrapes memes from Reddit, lets an admin approve them, and automatically posts them to Instagram on a schedule.
 
 ## Git rules
@@ -96,12 +98,13 @@ Create a media container (image URL + caption) → poll its status until ready �
 - `src/lib` — env validation, Cloudinary helpers
 - `src/lib/reddit` — Reddit OAuth client, image filtering, scrape service (`scrape.ts` is pure, dependency-injected and unit-tested; `run.ts` wires real services)
 - `src/app/actions` — server actions (scrape, approve/reject, schedule, settings, publish, login/logout), all behind `requireAdmin()`
-- `src/lib/schedule` — `assignSlots` (pure, timezone/DST-aware slot assignment), formatting helpers
+- `src/lib/schedule` — `service.ts` (schedule approved posts, auto-schedule), `local-time.ts`, `assignSlots` (pure, timezone/DST-aware slot assignment), formatting helpers
 - `src/db/queries.ts` — all DB access; `queries.test.ts` runs them against in-memory PGlite using the real migration
 - Pages (in the `(app)` route group, which adds the nav): `/` dashboard (tabs; Approved tab has the schedule form), `/schedule`, `/settings`
 - `src/lib/instagram` — Instagram Login API client (`api.ts`), publish service (`publish.ts`, claims a row atomically so a post is never published twice), config. OAuth routes in `src/app/api/instagram/{connect,callback}`. Tokens are AES-GCM encrypted (`src/lib/crypto.ts`, needs `TOKEN_ENCRYPTION_KEY`).
 - `src/inngest` — client, functions, and job logic (`jobs.ts`, dependency-injected and tested). Served at `/api/inngest`.
   - `publish-due-posts` runs every 5 min: publishes at most ONE due post per run (spaces out catch-up posts), and marks posts more than 6h late as `failed` ("Missed its time slot") instead of posting them late. Failed posts are never auto-retried (avoids double posts); the user clicks Retry.
-  - `refresh-instagram-token` runs daily at 03:00 UTC.
+  - `refresh-instagram-token` runs daily at 03:00 UTC. `scrape-memes-daily` runs at 06:00 UTC (setting `autoScrape`). `cleanup-rejected-images` runs daily and drops Cloudinary images of memes rejected >14 days ago.
+  - `publish-due-posts` also marks posts stuck in `publishing` >15 min as failed (can't know if Instagram accepted them, so a human checks before Retry).
   - To test locally: `INNGEST_DEV=1 npm run dev`, then `npx inngest-cli@latest dev -u http://localhost:3000/api/inngest`, and `curl -X PUT localhost:3000/api/inngest` to sync.
 - `src/components/ui` — shadcn components

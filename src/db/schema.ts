@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   integer,
   pgEnum,
@@ -65,6 +66,8 @@ export const scheduledPosts = pgTable(
     igMediaId: varchar("ig_media_id", { length: 64 }),
     error: text("error"),
     attempts: integer("attempts").default(0).notNull(),
+    // set when publishing starts; lets a job spot posts stuck mid-publish
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
@@ -83,4 +86,9 @@ export const settings = pgTable("settings", {
   // "HH:mm" slots in the configured timezone
   postSlots: text("post_slots").array().default(["09:00", "14:00", "20:00"]).notNull(),
   timezone: varchar("timezone", { length: 64 }).default("UTC").notNull(),
+  // scrape once a day automatically
+  autoScrape: boolean("auto_scrape").default(true).notNull(),
+  // schedule a post into the next free slot as soon as it is approved
+  autoSchedule: boolean("auto_schedule").default(false).notNull(),
+  autoScheduleDays: integer("auto_schedule_days").default(7).notNull(),
 });

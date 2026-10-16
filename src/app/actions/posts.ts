@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { setPostStatus, unschedulePendingForPost } from "@/db/queries";
 import { requireAdmin } from "@/lib/auth/session";
+import { autoScheduleIfEnabled } from "@/lib/schedule/service";
 import { runScrape } from "@/lib/reddit/run";
 
 export type ScrapeState = { message: string; ok: boolean } | null;
@@ -37,5 +38,12 @@ export async function reviewPost(formData: FormData) {
   await setPostStatus(parsed.data.id, parsed.data.status);
   // un-approving also frees its time slot
   if (parsed.data.status !== "approved") await unschedulePendingForPost(parsed.data.id);
+  else {
+    try {
+      await autoScheduleIfEnabled();
+    } catch (e) {
+      console.error("auto-schedule failed", e); // the post stays approved; the user can schedule manually
+    }
+  }
   revalidatePath("/", "layout");
 }

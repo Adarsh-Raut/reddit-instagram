@@ -6,6 +6,8 @@ const ok = {
   scrapeCount: "15",
   postSlots: "20:00, 09:00 14:00",
   timezone: "Asia/Kolkata",
+  autoScrape: "on",
+  autoScheduleDays: "7",
 };
 
 describe("settingsInput", () => {
@@ -16,6 +18,12 @@ describe("settingsInput", () => {
     expect(r.scrapeCount).toBe(15);
   });
 
+  it("treats checkboxes as on only when ticked", () => {
+    const r = settingsInput.parse(ok);
+    expect(r).toMatchObject({ autoScrape: true, autoSchedule: false, autoScheduleDays: 7 });
+    expect(settingsInput.parse({ ...ok, autoSchedule: "on" }).autoSchedule).toBe(true);
+  });
+
   it.each([
     ["bad slot", { postSlots: "9am" }],
     ["no slots", { postSlots: "" }],
@@ -24,6 +32,8 @@ describe("settingsInput", () => {
     ["bad timezone", { timezone: "Nowhere/Land" }],
     ["count too high", { scrapeCount: "500" }],
     ["count zero", { scrapeCount: "0" }],
+    ["auto-schedule days 0", { autoScheduleDays: "0" }],
+    ["auto-schedule days 500", { autoScheduleDays: "500" }],
   ])("rejects %s", (_n, over) => {
     expect(settingsInput.safeParse({ ...ok, ...over }).success).toBe(false);
   });

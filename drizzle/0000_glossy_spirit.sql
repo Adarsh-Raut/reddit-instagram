@@ -19,6 +19,7 @@ CREATE TABLE "scheduled_posts" (
 	"ig_media_id" varchar(64),
 	"error" text,
 	"attempts" integer DEFAULT 0 NOT NULL,
+	"claimed_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "scheduled_posts_scraped_post_uniq" UNIQUE("scraped_post_id"),
 	CONSTRAINT "scheduled_posts_time_uniq" UNIQUE("scheduled_at")
@@ -44,7 +45,10 @@ CREATE TABLE "settings" (
 	"subreddits" text[] DEFAULT '{"memes","dankmemes"}' NOT NULL,
 	"scrape_count" integer DEFAULT 15 NOT NULL,
 	"post_slots" text[] DEFAULT '{"09:00","14:00","20:00"}' NOT NULL,
-	"timezone" varchar(64) DEFAULT 'UTC' NOT NULL
+	"timezone" varchar(64) DEFAULT 'UTC' NOT NULL,
+	"auto_scrape" boolean DEFAULT true NOT NULL,
+	"auto_schedule" boolean DEFAULT false NOT NULL,
+	"auto_schedule_days" integer DEFAULT 7 NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "scheduled_posts" ADD CONSTRAINT "scheduled_posts_scraped_post_id_scraped_posts_id_fk" FOREIGN KEY ("scraped_post_id") REFERENCES "public"."scraped_posts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

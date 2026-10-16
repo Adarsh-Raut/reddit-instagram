@@ -30,6 +30,39 @@ export function SettingsForm({ settings }: { settings: AppSettings }) {
         <input name="timezone" defaultValue={settings.timezone} className={field} />
         <span className="text-xs text-muted-foreground">IANA name, e.g. Asia/Kolkata or America/New_York</span>
       </label>
+      <fieldset className="space-y-3 rounded-lg border p-3 text-sm">
+        <legend className="px-1 font-medium">Automation</legend>
+        <label className="flex items-start gap-2">
+          <input type="checkbox" name="autoScrape" defaultChecked={settings.autoScrape} className="mt-1" />
+          <span>
+            Scrape new memes every day
+            <span className="block text-xs text-muted-foreground">
+              Runs at 06:00 UTC. New memes still wait for your approval.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2">
+          <input type="checkbox" name="autoSchedule" defaultChecked={settings.autoSchedule} className="mt-1" />
+          <span>
+            Schedule memes automatically when I approve them
+            <span className="block text-xs text-muted-foreground">
+              Each approved meme takes the next free post time.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-center gap-2">
+          Look ahead
+          <input
+            type="number"
+            name="autoScheduleDays"
+            min={1}
+            max={90}
+            defaultValue={settings.autoScheduleDays}
+            className="w-16 rounded-md border bg-background px-2 py-1"
+          />
+          days when auto-scheduling
+        </label>
+      </fieldset>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save settings"}</Button>
         {state && (

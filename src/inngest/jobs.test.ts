@@ -2,10 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 import type { IgAccount } from "@/db/queries";
 import {
   MAX_LATE_MS,
+  REJECTED_IMAGE_TTL_MS,
+  STUCK_AFTER_MS,
+  runAutoScrape,
+  runImageCleanup,
   runPublishDue,
   runRefreshToken,
   shouldRefresh,
+  type CleanupJobDeps,
   type PublishJobDeps,
+  type ScrapeJobDeps,
   type RefreshJobDeps,
 } from "./jobs";
 
@@ -15,6 +21,7 @@ function pubDeps(over: Partial<PublishJobDeps> = {}): PublishJobDeps {
   return {
     now: () => NOW,
     failMissed: vi.fn().mockResolvedValue(0),
+    failStuck: vi.fn().mockResolvedValue(0),
     listDue: vi.fn().mockResolvedValue([]),
     publish: vi.fn().mockResolvedValue({ ok: true, mediaId: "M" }),
     ...over,
@@ -27,12 +34,13 @@ describe("runPublishDue", () => {
     await runPublishDue(d);
     const cutoff = new Date(NOW.getTime() - MAX_LATE_MS);
     expect(d.failMissed).toHaveBeenCalledWith(cutoff);
+    expect(d.failStuck).toHaveBeenCalledWith(new Date(NOW.getTime() - STUCK_AFTER_MS));
     expect(d.listDue).toHaveBeenCalledWith(NOW, cutoff, 1);
   });
 
   it("publishes each due post and reports results", async () => {
     const d = pubDeps({ listDue: vi.fn().mockResolvedValue(["a"]), failMissed: vi.fn().mockResolvedValue(2) });
-    expect(await runPublishDue(d)).toEqual({ missed: 2, results: [{ id: "a", ok: true }] });
+    expect(await runPublishDue(d)).toEqual({ stuck: 0, missed: 2, results: [{ id: "a", ok: true }] });
     expect(d.publish).toHaveBeenCalledWith("a");
   });
 
@@ -46,7 +54,7 @@ describe("runPublishDue", () => {
 
   it("does nothing when nothing is due", async () => {
     const d = pubDeps();
-    expect(await runPublishDue(d)).toEqual({ missed: 0, results: [] });
+    expect(await runPublishDue(d)).toEqual({ stuck: 0, missed: 0, results: [] });
     expect(d.publish).not.toHaveBeenCalled();
   });
 });
@@ -114,5 +122,68 @@ describe("runRefreshToken", () => {
     const d = refDeps(account(5), { refresh: vi.fn().mockRejectedValue(new Error("bad token")) });
     await expect(runRefreshToken(d)).rejects.toThrow("bad token");
     expect(d.save).not.toHaveBeenCalled();
+  });
+});
+
+describe("runAutoScrape", () => {
+  const result = (over = {}) => ({ added: 5, skippedDuplicates: 2, errors: [] as string[], ...over });
+  const deps = (autoScrape: boolean, scrape = vi.fn().mockResolvedValue(result())): ScrapeJobDeps => ({
+    getSettings: async () => ({ autoScrape }),
+    scrape,
+  });
+
+  it("skips when auto-scrape is off, without touching Reddit", async () => {
+    const d = deps(false);
+    expect(await runAutoScrape(d)).toEqual({ skipped: true });
+    expect(d.scrape).not.toHaveBeenCalled();
+  });
+
+  it("scrapes when on and reports counts", async () => {
+    expect(await runAutoScrape(deps(true))).toEqual({ skipped: false, added: 5, duplicates: 2, errors: 0 });
+  });
+
+  it("does not throw on a partial failure (no pointless retry)", async () => {
+    const d = deps(true, vi.fn().mockResolvedValue(result({ added: 3, errors: ["r/x 403"] })));
+    expect((await runAutoScrape(d)) as { added: number }).toMatchObject({ added: 3, errors: 1 });
+  });
+
+  it("throws when nothing was added and there were errors, so Inngest retries", async () => {
+    const d = deps(true, vi.fn().mockResolvedValue(result({ added: 0, errors: ["Reddit auth failed: 401"] })));
+    await expect(runAutoScrape(d)).rejects.toThrow(/401/);
+  });
+
+  it("does not throw when nothing new was found and nothing failed", async () => {
+    const d = deps(true, vi.fn().mockResolvedValue(result({ added: 0 })));
+    await expect(runAutoScrape(d)).resolves.toMatchObject({ added: 0 });
+  });
+});
+
+describe("runImageCleanup", () => {
+  const mk = (over: Partial<CleanupJobDeps> = {}): CleanupJobDeps => ({
+    now: () => NOW,
+    listStale: vi.fn().mockResolvedValue([
+      { id: "1", publicId: "memes/a" },
+      { id: "2", publicId: "memes/b" },
+    ]),
+    deleteImage: vi.fn().mockResolvedValue(undefined),
+    clear: vi.fn().mockResolvedValue(undefined),
+    ...over,
+  });
+
+  it("deletes each stale image and clears the row, using the TTL cutoff", async () => {
+    const d = mk();
+    expect(await runImageCleanup(d)).toEqual({ deleted: 2, errors: [] });
+    expect(d.listStale).toHaveBeenCalledWith(new Date(NOW.getTime() - REJECTED_IMAGE_TTL_MS), 100);
+    expect(d.clear).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the row (does not clear) when Cloudinary deletion fails, and carries on", async () => {
+    const del = vi.fn().mockRejectedValueOnce(new Error("rate limited")).mockResolvedValue(undefined);
+    const d = mk({ deleteImage: del });
+    const r = await runImageCleanup(d);
+    expect(r.deleted).toBe(1);
+    expect(r.errors[0]).toMatch(/memes\/a: rate limited/);
+    expect(d.clear).toHaveBeenCalledTimes(1);
+    expect(d.clear).toHaveBeenCalledWith("2");
   });
 });

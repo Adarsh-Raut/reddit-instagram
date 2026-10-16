@@ -1,5 +1,5 @@
 {
-  "id": "fb086b74-021a-4821-94d1-a1cf00d76496",
+  "id": "9ab534a8-b9ab-4954-a7b5-dd28782fe834",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -119,6 +119,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -332,6 +338,27 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'UTC'"
+        },
+        "auto_scrape": {
+          "name": "auto_scrape",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "auto_schedule": {
+          "name": "auto_schedule",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "auto_schedule_days": {
+          "name": "auto_schedule_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 7
         }
       },
       "indexes": {},

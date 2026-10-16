@@ -48,13 +48,19 @@ export function PostGrid({
         <li key={p.id}>
           <Card className="h-full overflow-hidden pt-0">
             <div className="relative aspect-square bg-muted">
-              <Image
-                src={p.cloudinaryUrl}
-                alt={p.title}
-                fill
-                sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                className="object-contain"
-              />
+              {p.cloudinaryUrl ? (
+                <Image
+                  src={p.cloudinaryUrl}
+                  alt={p.title}
+                  fill
+                  sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                  className="object-contain"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                  Image removed to save space
+                </div>
+              )}
             </div>
             <CardContent className="space-y-2">
               <p className="line-clamp-2 text-sm font-medium">{p.title}</p>

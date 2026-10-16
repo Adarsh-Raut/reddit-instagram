@@ -2,11 +2,14 @@ import Image from "next/image";
 import { Suspense } from "react";
 import { unschedulePost } from "@/app/actions/schedule";
 import { requireAdmin } from "@/lib/auth/session";
+import { EditScheduleForm } from "@/components/edit-schedule-form";
 import { PublishButton } from "@/components/publish-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSettings, listSchedule } from "@/db/queries";
+import { buildCaption } from "@/lib/instagram/api";
+import { toLocalInputValue } from "@/lib/schedule/local-time";
 import { dayKey, formatInTimezone } from "@/lib/schedule/slots";
 
 const STATUS_VARIANT = {
@@ -57,9 +60,11 @@ async function ScheduleList() {
           <h2 className="text-sm font-medium">{day}</h2>
           <ul className="space-y-2">
             {list.map((it) => (
-              <li key={it.id} className="flex items-center gap-3 rounded-lg border p-2">
+              <li key={it.id} className="flex flex-wrap items-center gap-3 rounded-lg border p-2">
                 <div className="relative size-16 shrink-0 overflow-hidden rounded bg-muted">
-                  <Image src={it.post.cloudinaryUrl} alt={it.post.title} fill sizes="64px" className="object-cover" />
+                  {it.post.cloudinaryUrl && (
+                    <Image src={it.post.cloudinaryUrl} alt={it.post.title} fill sizes="64px" className="object-cover" />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{it.post.title}</p>
@@ -77,6 +82,15 @@ async function ScheduleList() {
                     <input type="hidden" name="id" value={it.id} />
                     <Button type="submit" size="sm" variant="outline">Unschedule</Button>
                   </form>
+                )}
+                {(it.status === "pending" || it.status === "failed") && (
+                  <EditScheduleForm
+                    id={it.id}
+                    caption={it.caption}
+                    defaultCaption={buildCaption(it.post)}
+                    whenValue={toLocalInputValue(it.scheduledAt, timezone)}
+                    timezone={timezone}
+                  />
                 )}
               </li>
             ))}

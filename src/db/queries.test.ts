@@ -59,8 +59,8 @@ beforeEach(async () => {
 describe("settings", () => {
   it("creates defaults on first read and persists updates", async () => {
     expect((await getSettings()).postSlots).toEqual(["09:00", "14:00", "20:00"]);
-    await saveSettings({ subreddits: ["a"], scrapeCount: 5, postSlots: ["10:00"], timezone: "UTC" });
-    expect(await getSettings()).toMatchObject({ subreddits: ["a"], scrapeCount: 5, timezone: "UTC" });
+    await saveSettings({ subreddits: ["a"], scrapeCount: 5, postSlots: ["10:00"], timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3 });
+    expect(await getSettings()).toMatchObject({ subreddits: ["a"], scrapeCount: 5, timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3 });
   });
 });
 

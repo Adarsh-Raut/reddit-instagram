@@ -37,3 +37,11 @@ export function instagramReadyUrl(publicId: string) {
     ],
   });
 }
+
+/** Remove an image from Cloudinary. Throws if Cloudinary reports anything but ok/not found. */
+export async function deleteImage(publicId: string) {
+  const res = await configure().uploader.destroy(publicId, { resource_type: "image", invalidate: true });
+  if (res.result !== "ok" && res.result !== "not found") {
+    throw new Error(`Cloudinary delete failed: ${res.result}`);
+  }
+}

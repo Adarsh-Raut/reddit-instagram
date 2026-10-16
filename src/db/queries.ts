@@ -15,14 +15,17 @@ export async function getSettings(): Promise<AppSettings> {
 
 export type PostWithSchedule = ScrapedPost & { scheduledAt: Date | null };
 
-export async function listPosts(status: PostStatus): Promise<PostWithSchedule[]> {
+export const PAGE_SIZE = 24;
+
+export async function listPosts(status: PostStatus, page = 1): Promise<PostWithSchedule[]> {
   const rows = await getDb()
     .select({ post: scrapedPosts, scheduledAt: scheduledPosts.scheduledAt })
     .from(scrapedPosts)
     .leftJoin(scheduledPosts, eq(scheduledPosts.scrapedPostId, scrapedPosts.id))
     .where(eq(scrapedPosts.status, status))
-    .orderBy(desc(scrapedPosts.scrapedAt))
-    .limit(100);
+    .orderBy(desc(scrapedPosts.scrapedAt), asc(scrapedPosts.id))
+    .limit(PAGE_SIZE)
+    .offset((Math.max(1, page) - 1) * PAGE_SIZE);
   return rows.map((r) => ({ ...r.post, scheduledAt: r.scheduledAt }));
 }
 
@@ -56,6 +59,7 @@ export type ScheduleItem = {
   scheduledAt: Date;
   status: (typeof scheduledPosts.$inferSelect)["status"];
   error: string | null;
+  caption: string;
   post: ScrapedPost;
 };
 
@@ -74,6 +78,7 @@ export async function listSchedule(): Promise<ScheduleItem[]> {
     scheduledAt: r.s.scheduledAt,
     status: r.s.status,
     error: r.s.error,
+    caption: r.s.caption,
     post: r.post,
   }));
 }
@@ -96,6 +101,9 @@ export async function saveSettings(v: {
   scrapeCount: number;
   postSlots: string[];
   timezone: string;
+  autoScrape: boolean;
+  autoSchedule: boolean;
+  autoScheduleDays: number;
 }) {
   await getDb()
     .insert(settings)
@@ -105,10 +113,11 @@ export async function saveSettings(v: {
 
 export async function countByStatus(): Promise<Record<PostStatus, number>> {
   const rows = await getDb()
-    .select({ status: scrapedPosts.status })
-    .from(scrapedPosts);
+    .select({ status: scrapedPosts.status, n: sql<number>`count(*)::int` })
+    .from(scrapedPosts)
+    .groupBy(scrapedPosts.status);
   const counts: Record<PostStatus, number> = { new: 0, approved: 0, rejected: 0, posted: 0 };
-  for (const r of rows) counts[r.status]++;
+  for (const r of rows) counts[r.status] = r.n;
   return counts;
 }
 
@@ -180,7 +189,12 @@ export async function claimForPublishing(scheduleId: string): Promise<PublishCla
   const db = getDb();
   const [claimed] = await db
     .update(scheduledPosts)
-    .set({ status: "publishing", error: null, attempts: sql`${scheduledPosts.attempts} + 1` })
+    .set({
+      status: "publishing",
+      error: null,
+      attempts: sql`${scheduledPosts.attempts} + 1`,
+      claimedAt: sql`now()`,
+    })
     .where(and(eq(scheduledPosts.id, scheduleId), inArray(scheduledPosts.status, ["pending", "failed"])))
     .returning();
   if (!claimed) return null;
@@ -232,4 +246,89 @@ export async function markFailed(scheduleId: string, error: string) {
     .update(scheduledPosts)
     .set({ status: "failed", error: error.slice(0, 500) })
     .where(eq(scheduledPosts.id, scheduleId));
+}
+
+/**
+ * Posts stuck in "publishing" (the server died mid-publish) become "failed" with a
+ * warning. We can't know whether Instagram accepted the post, so a human must check
+ * the account before using Retry.
+ */
+export async function failStuck(claimedBefore: Date): Promise<number> {
+  const rows = await getDb()
+    .update(scheduledPosts)
+    .set({
+      status: "failed",
+      error: "Publishing was interrupted. Check Instagram for this post before using Retry.",
+    })
+    .where(and(eq(scheduledPosts.status, "publishing"), lt(scheduledPosts.claimedAt, claimedBefore)))
+    .returning({ id: scheduledPosts.id });
+  return rows.length;
+}
+
+/** Edit a caption that hasn't been published yet. Returns false if it can't be edited. */
+export async function updateScheduleCaption(scheduleId: string, caption: string): Promise<boolean> {
+  const rows = await getDb()
+    .update(scheduledPosts)
+    .set({ caption })
+    .where(and(eq(scheduledPosts.id, scheduleId), inArray(scheduledPosts.status, ["pending", "failed"])))
+    .returning({ id: scheduledPosts.id });
+  return rows.length > 0;
+}
+
+/**
+ * Move an unpublished post to a new time; a failed/missed post becomes pending again.
+ * Throws on a slot clash (unique constraint). Returns false if it can't be moved.
+ */
+export async function rescheduleTo(scheduleId: string, at: Date): Promise<boolean> {
+  const rows = await getDb()
+    .update(scheduledPosts)
+    .set({ scheduledAt: at, status: "pending", error: null })
+    .where(and(eq(scheduledPosts.id, scheduleId), inArray(scheduledPosts.status, ["pending", "failed"])))
+    .returning({ id: scheduledPosts.id });
+  return rows.length > 0;
+}
+
+export async function getScheduleCaptionInfo(scheduleId: string) {
+  const [row] = await getDb()
+    .select({ caption: scheduledPosts.caption, scheduledAt: scheduledPosts.scheduledAt })
+    .from(scheduledPosts)
+    .where(eq(scheduledPosts.id, scheduleId));
+  return row ?? null;
+}
+
+export async function countFailed(): Promise<number> {
+  const [row] = await getDb()
+    .select({ n: sql<number>`count(*)::int` })
+    .from(scheduledPosts)
+    .where(eq(scheduledPosts.status, "failed"));
+  return row.n;
+}
+
+/** How many pending posts are still ahead of `now`, and when the last one goes out. */
+export async function upcomingStats(now: Date): Promise<{ count: number; last: Date | null }> {
+  const [row] = await getDb()
+    .select({ n: sql<number>`count(*)::int`, last: sql<Date | null>`max(${scheduledPosts.scheduledAt})` })
+    .from(scheduledPosts)
+    .where(and(eq(scheduledPosts.status, "pending"), gte(scheduledPosts.scheduledAt, now)));
+  return { count: row.n, last: row.last ? new Date(row.last) : null };
+}
+
+/** Rejected posts old enough that we can drop their image from Cloudinary. */
+export async function listStaleRejected(before: Date, limit: number) {
+  return getDb()
+    .select({ id: scrapedPosts.id, publicId: scrapedPosts.cloudinaryPublicId })
+    .from(scrapedPosts)
+    .where(
+      and(
+        eq(scrapedPosts.status, "rejected"),
+        lt(scrapedPosts.scrapedAt, before),
+        sql`${scrapedPosts.cloudinaryUrl} <> ''`,
+      ),
+    )
+    .limit(limit);
+}
+
+/** Keep the row (its reddit id and image hash still prevent re-scraping) but drop the image. */
+export async function clearImage(id: string) {
+  await getDb().update(scrapedPosts).set({ cloudinaryUrl: "" }).where(eq(scrapedPosts.id, id));
 }
