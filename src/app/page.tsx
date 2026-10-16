@@ -1,39 +1,77 @@
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import Link from "next/link";
+import { Suspense } from "react";
+import { PostGrid } from "@/components/post-grid";
+import { ScrapeButton } from "@/components/scrape-button";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { countByStatus, listPosts, type PostStatus } from "@/db/queries";
 
-const steps = [
-  "Scrape memes from Reddit",
-  "Review and approve on the dashboard",
-  "Schedule posts across days",
-  "Publish automatically to Instagram",
+const TABS: { status: PostStatus; label: string }[] = [
+  { status: "new", label: "New" },
+  { status: "approved", label: "Approved" },
+  { status: "rejected", label: "Rejected" },
+  { status: "posted", label: "Posted" },
 ];
 
-export default function Home() {
-  return (
-    <main className="mx-auto max-w-3xl space-y-6 p-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Reddit → Instagram</h1>
-        <Badge variant="secondary">Scaffold</Badge>
-      </header>
+function parseStatus(value: string | string[] | undefined): PostStatus {
+  const v = Array.isArray(value) ? value[0] : value;
+  return TABS.find((t) => t.status === v)?.status ?? "new";
+}
+
+async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
+  const status = parseStatus((await searchParams).status);
+
+  let data;
+  try {
+    const [posts, counts] = await Promise.all([listPosts(status), countByStatus()]);
+    data = { posts, counts };
+  } catch (e) {
+    console.error("Dashboard data load failed", e);
+    return (
       <Card>
         <CardHeader>
-          <CardTitle>Dashboard coming soon</CardTitle>
-          <CardDescription>The project scaffold is ready.</CardDescription>
+          <CardTitle>Couldn’t load posts</CardTitle>
+          <CardDescription>
+            Check that DATABASE_URL is set in .env.local and the migration has been
+            applied (npm run db:push).
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <ol className="list-decimal space-y-1 pl-5 text-sm">
-            {steps.map((s) => (
-              <li key={s}>{s}</li>
-            ))}
-          </ol>
-        </CardContent>
       </Card>
+    );
+  }
+
+  return (
+    <>
+      <nav className="flex gap-2 border-b" aria-label="Post status">
+        {TABS.map((t) => (
+          <Link
+            key={t.status}
+            href={t.status === "new" ? "/" : `/?status=${t.status}`}
+            aria-current={t.status === status ? "page" : undefined}
+            className={
+              t.status === status
+                ? "border-b-2 border-foreground px-3 py-2 text-sm font-medium"
+                : "px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+            }
+          >
+            {t.label} ({data.counts[t.status]})
+          </Link>
+        ))}
+      </nav>
+      <PostGrid posts={data.posts} status={status} />
+    </>
+  );
+}
+
+export default function Home({ searchParams }: PageProps<"/">) {
+  return (
+    <main className="mx-auto max-w-5xl space-y-6 p-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Reddit → Instagram</h1>
+        <ScrapeButton />
+      </header>
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+        <Dashboard searchParams={searchParams} />
+      </Suspense>
     </main>
   );
 }

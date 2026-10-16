@@ -86,5 +86,7 @@ Create a media container (image URL + caption) → poll its status until ready �
 
 - `src/db` — Drizzle schema and lazy Neon client; migrations in `drizzle/`
 - `src/lib` — env validation, Cloudinary helpers
+- `src/lib/reddit` — Reddit OAuth client, image filtering, scrape service (`scrape.ts` is pure, dependency-injected and unit-tested; `run.ts` wires real services)
+- `src/app/actions` — server actions (scrape, approve/reject). **No auth yet; add before deploying.**
 - `src/inngest` — client and background functions, served at `/api/inngest`
 - `src/components/ui` — shadcn components
