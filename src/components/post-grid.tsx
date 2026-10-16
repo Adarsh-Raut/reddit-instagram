@@ -3,7 +3,8 @@ import { reviewPost } from "@/app/actions/posts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import type { PostStatus, ScrapedPost } from "@/db/queries";
+import type { PostStatus, PostWithSchedule } from "@/db/queries";
+import { formatInTimezone } from "@/lib/schedule/slots";
 
 const EMPTY: Record<PostStatus, string> = {
   new: "No new memes. Hit “Scrape now” to fetch some.",
@@ -29,7 +30,15 @@ function ReviewButton({ id, status, label, variant }: {
   );
 }
 
-export function PostGrid({ posts, status }: { posts: ScrapedPost[]; status: PostStatus }) {
+export function PostGrid({
+  posts,
+  status,
+  timezone,
+}: {
+  posts: PostWithSchedule[];
+  status: PostStatus;
+  timezone: string;
+}) {
   if (posts.length === 0) {
     return <p className="py-12 text-center text-sm text-muted-foreground">{EMPTY[status]}</p>;
   }
@@ -56,6 +65,15 @@ export function PostGrid({ posts, status }: { posts: ScrapedPost[]; status: Post
                   source
                 </a>
               </div>
+              {p.status === "approved" && (
+                <p className="text-xs">
+                  {p.scheduledAt ? (
+                    <Badge>Scheduled {formatInTimezone(p.scheduledAt, timezone)}</Badge>
+                  ) : (
+                    <Badge variant="outline">Not scheduled yet</Badge>
+                  )}
+                </p>
+              )}
             </CardContent>
             <CardFooter className="mt-auto gap-2">
               {p.status === "new" && (

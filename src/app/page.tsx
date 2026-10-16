@@ -3,7 +3,8 @@ import { Suspense } from "react";
 import { PostGrid } from "@/components/post-grid";
 import { ScrapeButton } from "@/components/scrape-button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { countByStatus, listPosts, type PostStatus } from "@/db/queries";
+import { ScheduleForm } from "@/components/schedule-form";
+import { countByStatus, getSettings, listPosts, type PostStatus } from "@/db/queries";
 
 const TABS: { status: PostStatus; label: string }[] = [
   { status: "new", label: "New" },
@@ -22,8 +23,12 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
 
   let data;
   try {
-    const [posts, counts] = await Promise.all([listPosts(status), countByStatus()]);
-    data = { posts, counts };
+    const [posts, counts, settings] = await Promise.all([
+      listPosts(status),
+      countByStatus(),
+      getSettings(),
+    ]);
+    data = { posts, counts, timezone: settings.timezone };
   } catch (e) {
     console.error("Dashboard data load failed", e);
     return (
@@ -57,7 +62,10 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
           </Link>
         ))}
       </nav>
-      <PostGrid posts={data.posts} status={status} />
+      {status === "approved" && (
+        <ScheduleForm unscheduledCount={data.posts.filter((p) => !p.scheduledAt).length} />
+      )}
+      <PostGrid posts={data.posts} status={status} timezone={data.timezone} />
     </>
   );
 }
@@ -66,7 +74,7 @@ export default function Home({ searchParams }: PageProps<"/">) {
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Reddit → Instagram</h1>
+        <h1 className="text-2xl font-semibold">Memes</h1>
         <ScrapeButton />
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>

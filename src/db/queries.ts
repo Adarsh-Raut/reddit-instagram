@@ -1,6 +1,6 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { getDb } from "./index";
-import { scrapedPosts, settings } from "./schema";
+import { scheduledPosts, scrapedPosts, settings } from "./schema";
 
 export type ScrapedPost = typeof scrapedPosts.$inferSelect;
 export type PostStatus = ScrapedPost["status"];
@@ -13,13 +13,94 @@ export async function getSettings(): Promise<AppSettings> {
   return row;
 }
 
-export async function listPosts(status: PostStatus): Promise<ScrapedPost[]> {
-  return getDb()
-    .select()
+export type PostWithSchedule = ScrapedPost & { scheduledAt: Date | null };
+
+export async function listPosts(status: PostStatus): Promise<PostWithSchedule[]> {
+  const rows = await getDb()
+    .select({ post: scrapedPosts, scheduledAt: scheduledPosts.scheduledAt })
     .from(scrapedPosts)
+    .leftJoin(scheduledPosts, eq(scheduledPosts.scrapedPostId, scrapedPosts.id))
     .where(eq(scrapedPosts.status, status))
     .orderBy(desc(scrapedPosts.scrapedAt))
     .limit(100);
+  return rows.map((r) => ({ ...r.post, scheduledAt: r.scheduledAt }));
+}
+
+/** Approved posts that have no schedule row yet, oldest first. */
+export async function listApprovedUnscheduledIds(): Promise<string[]> {
+  const rows = await getDb()
+    .select({ id: scrapedPosts.id })
+    .from(scrapedPosts)
+    .leftJoin(scheduledPosts, eq(scheduledPosts.scrapedPostId, scrapedPosts.id))
+    .where(and(eq(scrapedPosts.status, "approved"), isNull(scheduledPosts.id)))
+    .orderBy(asc(scrapedPosts.scrapedAt));
+  return rows.map((r) => r.id);
+}
+
+/** Epoch ms of every scheduled time from `from` onward (slots already taken). */
+export async function occupiedTimes(from: Date): Promise<number[]> {
+  const rows = await getDb()
+    .select({ at: scheduledPosts.scheduledAt })
+    .from(scheduledPosts)
+    .where(gte(scheduledPosts.scheduledAt, from));
+  return rows.map((r) => r.at.getTime());
+}
+
+export async function insertSchedule(rows: { scrapedPostId: string; scheduledAt: Date }[]) {
+  if (rows.length === 0) return;
+  await getDb().insert(scheduledPosts).values(rows);
+}
+
+export type ScheduleItem = {
+  id: string;
+  scheduledAt: Date;
+  status: (typeof scheduledPosts.$inferSelect)["status"];
+  error: string | null;
+  post: ScrapedPost;
+};
+
+/** Everything scheduled in the last 24h or later, soonest first. */
+export async function listSchedule(): Promise<ScheduleItem[]> {
+  const from = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const rows = await getDb()
+    .select({ s: scheduledPosts, post: scrapedPosts })
+    .from(scheduledPosts)
+    .innerJoin(scrapedPosts, eq(scrapedPosts.id, scheduledPosts.scrapedPostId))
+    .where(gte(scheduledPosts.scheduledAt, from))
+    .orderBy(asc(scheduledPosts.scheduledAt))
+    .limit(300);
+  return rows.map((r) => ({
+    id: r.s.id,
+    scheduledAt: r.s.scheduledAt,
+    status: r.s.status,
+    error: r.s.error,
+    post: r.post,
+  }));
+}
+
+/** Only pending schedules can be removed; anything publishing/posted is left alone. */
+export async function unschedule(scheduleId: string) {
+  await getDb()
+    .delete(scheduledPosts)
+    .where(and(eq(scheduledPosts.id, scheduleId), eq(scheduledPosts.status, "pending")));
+}
+
+export async function unschedulePendingForPost(postId: string) {
+  await getDb()
+    .delete(scheduledPosts)
+    .where(and(eq(scheduledPosts.scrapedPostId, postId), eq(scheduledPosts.status, "pending")));
+}
+
+export async function saveSettings(v: {
+  subreddits: string[];
+  scrapeCount: number;
+  postSlots: string[];
+  timezone: string;
+}) {
+  await getDb()
+    .insert(settings)
+    .values({ id: 1, ...v })
+    .onConflictDoUpdate({ target: settings.id, set: v });
 }
 
 export async function countByStatus(): Promise<Record<PostStatus, number>> {

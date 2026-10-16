@@ -14,3 +14,8 @@ function create() {
 export function getDb() {
   return (instance ??= create());
 }
+
+/** Test hook: swap in another Drizzle instance (e.g. in-memory PGlite). */
+export function setDbForTests(db: unknown) {
+  instance = db as ReturnType<typeof create>;
+}

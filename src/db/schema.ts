@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -66,7 +67,12 @@ export const scheduledPosts = pgTable(
     attempts: integer("attempts").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("scheduled_posts_due_idx").on(t.status, t.scheduledAt)],
+  (t) => [
+    index("scheduled_posts_due_idx").on(t.status, t.scheduledAt),
+    // a meme is scheduled at most once, and a time slot holds at most one post
+    unique("scheduled_posts_scraped_post_uniq").on(t.scrapedPostId),
+    unique("scheduled_posts_time_uniq").on(t.scheduledAt),
+  ],
 );
 
 // Single-row settings table (id is always 1)

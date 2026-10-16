@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { setPostStatus } from "@/db/queries";
+import { setPostStatus, unschedulePendingForPost } from "@/db/queries";
 import { runScrape } from "@/lib/reddit/run";
 
 // TODO(auth): dashboard auth is not built yet. Before deploying, every action
@@ -35,5 +35,7 @@ export async function reviewPost(formData: FormData) {
   });
   if (!parsed.success) return;
   await setPostStatus(parsed.data.id, parsed.data.status);
-  revalidatePath("/");
+  // un-approving also frees its time slot
+  if (parsed.data.status !== "approved") await unschedulePendingForPost(parsed.data.id);
+  revalidatePath("/", "layout");
 }

@@ -19,7 +19,9 @@ CREATE TABLE "scheduled_posts" (
 	"ig_media_id" varchar(64),
 	"error" text,
 	"attempts" integer DEFAULT 0 NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "scheduled_posts_scraped_post_uniq" UNIQUE("scraped_post_id"),
+	CONSTRAINT "scheduled_posts_time_uniq" UNIQUE("scheduled_at")
 );
 --> statement-breakpoint
 CREATE TABLE "scraped_posts" (

@@ -1,5 +1,5 @@
 {
-  "id": "af5f7654-34da-4415-8ac4-d67c5c395b7d",
+  "id": "fb086b74-021a-4821-94d1-a1cf00d76496",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -167,7 +167,22 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "scheduled_posts_scraped_post_uniq": {
+          "name": "scheduled_posts_scraped_post_uniq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "scraped_post_id"
+          ]
+        },
+        "scheduled_posts_time_uniq": {
+          "name": "scheduled_posts_time_uniq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "scheduled_at"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

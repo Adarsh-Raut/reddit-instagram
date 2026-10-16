@@ -88,5 +88,8 @@ Create a media container (image URL + caption) → poll its status until ready �
 - `src/lib` — env validation, Cloudinary helpers
 - `src/lib/reddit` — Reddit OAuth client, image filtering, scrape service (`scrape.ts` is pure, dependency-injected and unit-tested; `run.ts` wires real services)
 - `src/app/actions` — server actions (scrape, approve/reject). **No auth yet; add before deploying.**
+- `src/lib/schedule` — `assignSlots` (pure, timezone/DST-aware slot assignment), formatting helpers
+- `src/db/queries.ts` — all DB access; `queries.test.ts` runs them against in-memory PGlite using the real migration
+- Pages: `/` dashboard (tabs; Approved tab has the schedule form), `/schedule`, `/settings`
 - `src/inngest` — client and background functions, served at `/api/inngest`
 - `src/components/ui` — shadcn components
