@@ -4,6 +4,15 @@ Last updated: 2026-10-16. Read this first when you come back to the project.
 
 ## Where things stand
 
+**Update 2026-10-18: deployed and verified end to end in production.**
+Live at https://reddit-instagram.vercel.app (Vercel + Neon + Inngest Cloud). Confirmed working with a real Instagram account:
+- Upload via "Add your own meme", Cloudinary storage, approve and schedule
+- Instagram connect (OAuth), **Publish now** posts to Instagram
+- **Automatic publishing**: a post scheduled for 11:02 was posted by the Inngest 5-minute job at about 11:05
+- Login, Activity log and alerts on the live site
+
+**Still unverified:** Reddit scraping (no Reddit API access yet), the daily auto-scrape, the token-refresh job (needs a token under 15 days from expiry), the image-cleanup job, and the failure paths against the real Instagram API (expired token, image rejected).
+
 **All planned coding is done and covered by automated tests (194 tests, lint, typecheck and production build pass).**
 What has *not* happened yet is a run against the real services. Everything external (Reddit, Cloudinary,
 Instagram) has only been exercised with mocks, and the database with a local Docker Postgres.
