@@ -1,8 +1,10 @@
 # Progress log: Reddit → Instagram meme automation
 
-Last updated: 2026-10-18. Read this first when you come back to the project.
+Last updated: 2026-10-19. Read this first when you come back to the project.
 
 ## Where things stand
+
+**Decision 2026-10-19 (Reddit): staying on manual uploads.** `reddit.com/prefs/apps` is gone; new API access now needs approval under Reddit's Responsible Builder Policy, and personal scrapers may be refused. The `developers.reddit.com` "create a project / playtest" steps are for Devvit apps that run inside Reddit and give an external server no client id, so we are not using them. The scraper code stays in place, untested against real Reddit and switched off by missing credentials; revisit only if access is granted. Scrape-related items below ("Reddit scraping", daily auto-scrape) therefore stay unverified on purpose. Fallbacks if ever needed: a third-party Reddit data service, or scraping from a home IP (breaks Reddit's terms, fragile). Also: the repo now has a GitHub remote (`origin`, in sync with `main`), so older lines saying "no remote" are outdated.
 
 **Update 2026-10-19 (month calendar).** Schedule now has List / Month views plus a per-day view. The month grid (Monday first, in the schedule's timezone) shows thumbnails ringed by status (dots on phones), highlights today, dims neighbouring months and marks planned days with fewer posts than daily post times ("2 of 3", "0 of 3") up to the last scheduled day. Past months stay browsable, which fixes posted history vanishing after 24 hours in the list view. New queries `listScheduleBetween` and `lastPendingAt`; invalid `?day=`/`?month=` values fall back safely. Verified in the browser at 1280 and 375px with a seeded month. 272 tests, lint, typecheck and build pass.
 
@@ -33,7 +35,7 @@ Live at https://reddit-instagram.vercel.app (Vercel + Neon + Inngest Cloud). Con
 What has *not* happened yet is a run against the real services. Everything external (Reddit, Cloudinary,
 Instagram) has only been exercised with mocks, and the database with a local Docker Postgres.
 
-Nothing has been pushed to GitHub. There is no remote yet. Everything is committed locally.
+The GitHub remote exists and `main` was in sync with it as of 2026-10-19. Push only when the user says so.
 
 ### What's built
 
@@ -72,7 +74,7 @@ Status of `.env.local` as of the last check (names only):
 | `APP_URL` | optional (defaults to `http://localhost:3000`) | |
 | `ADMIN_PASSWORD_HASH`, `SESSION_SECRET` | **missing** | run `npm run admin:setup` (prompts for a password, writes both) |
 | `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET` | **missing** | free Cloudinary account → dashboard |
-| `REDDIT_CLIENT_ID/CLIENT_SECRET/USER_AGENT` | **missing, Reddit access not granted** | https://www.reddit.com/prefs/apps → "script" app. Not needed for testing: use Add your own meme |
+| `REDDIT_CLIENT_ID/CLIENT_SECRET/USER_AGENT` | **missing, not pursuing** | `prefs/apps` no longer exists; access needs Reddit approval (see decision above). Use Add your own meme |
 
 **Until `npm run admin:setup` is run, the app is locked: every page redirects to /login and login is refused.** That's intentional (fail closed).
 

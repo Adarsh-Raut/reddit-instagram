@@ -162,7 +162,7 @@ All configuration lives in environment variables. Locally use `.env.local` (neve
 | `INSTAGRAM_APP_SECRET` | Instagram | Instagram app secret, same page |
 | `INSTAGRAM_API_VERSION` | optional | e.g. `v23.0`. Empty uses the app's default |
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | uploads, scraping, posting | From the Cloudinary dashboard |
-| `REDDIT_CLIENT_ID` / `_CLIENT_SECRET` / `_USER_AGENT` | scraping only | From a Reddit "script" app |
+| `REDDIT_CLIENT_ID` / `_CLIENT_SECRET` / `_USER_AGENT` | scraping only | Only if Reddit approves API access (see section 3) |
 | `INNGEST_DEV` | local jobs | Set to `1` locally. **Do not set in production** |
 | `INNGEST_SIGNING_KEY` / `INNGEST_EVENT_KEY` | production jobs | From Inngest Cloud (or added by its Vercel integration) |
 | `LOG_LEVEL` | optional | `debug`, `info`, `warn`, `error` or `silent`. Default: `debug` in dev, `info` in production |
@@ -205,12 +205,13 @@ Tokens last about 60 days. A daily job renews them; if one ever expires you simp
 
 ### 3. Reddit (scraping, optional)
 
-1. Go to <https://www.reddit.com/prefs/apps> and create an app of type **script**.
-2. Copy the client id (under the app name) and the secret into `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET`.
-3. Set `REDDIT_USER_AGENT` to something identifying, e.g. `web:reddit-instagram:v0.1 (by /u/yourname)`.
-4. Dashboard → **Scrape now**.
+**Status: not in use.** Reddit no longer lets you create an OAuth app yourself: `reddit.com/prefs/apps` has been replaced by the Responsible Builder Policy, where new API access is requested and approved by Reddit (personal scrapers may be refused). The `developers.reddit.com` "create a project / playtest" flow is for Devvit apps that run inside Reddit and does **not** give an external server like this one a client id. This project currently runs on *Add your own meme* only.
 
-Reddit now reviews API access for new apps, so this can take time or be refused. Everything else works without it; use *Add your own meme*.
+If you do get approval, the code is ready:
+
+1. Put the client id and secret Reddit gives you into `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET`.
+2. Set `REDDIT_USER_AGENT` to something identifying, e.g. `web:reddit-instagram:v0.1 (by /u/yourname)`.
+3. Dashboard → **Scrape now**.
 
 ### 4. Inngest (running the scheduled jobs)
 
