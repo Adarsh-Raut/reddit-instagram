@@ -8,6 +8,9 @@ export type AppSettings = typeof settings.$inferSelect;
 
 export async function getSettings(): Promise<AppSettings> {
   const db = getDb();
+  const [existing] = await db.select().from(settings).where(eq(settings.id, 1));
+  if (existing) return existing; // the normal case is a plain read: no write on every page view
+  // first run only: create the row (a concurrent request may have just done it)
   await db.insert(settings).values({ id: 1 }).onConflictDoNothing();
   const [row] = await db.select().from(settings).where(eq(settings.id, 1));
   return row;
@@ -314,21 +317,46 @@ export async function getScheduleCaptionInfo(scheduleId: string) {
   return row ?? null;
 }
 
-export async function countFailed(): Promise<number> {
-  const [row] = await getDb()
-    .select({ n: sql<number>`count(*)::int` })
-    .from(scheduledPosts)
-    .where(eq(scheduledPosts.status, "failed"));
-  return row.n;
-}
+export type AlertInputs = {
+  failedCount: number;
+  /** Pending posts still ahead of `now`. */
+  upcomingCount: number;
+  approvedUnscheduled: number;
+  hasAccount: boolean;
+  tokenExpiresAt: Date | null;
+  slotsPerDay: number;
+  autoSchedule: boolean;
+};
 
-/** How many pending posts are still ahead of `now`, and when the last one goes out. */
-export async function upcomingStats(now: Date): Promise<{ count: number; last: Date | null }> {
+/**
+ * Everything the alerts banner needs, in ONE round trip (it runs on every page, and on Neon each
+ * query is a separate HTTP request). Scalar subqueries keep it a single statement.
+ */
+export async function getAlertInputs(now: Date): Promise<AlertInputs> {
   const [row] = await getDb()
-    .select({ n: sql<number>`count(*)::int`, last: sql<Date | null>`max(${scheduledPosts.scheduledAt})` })
-    .from(scheduledPosts)
-    .where(and(eq(scheduledPosts.status, "pending"), gte(scheduledPosts.scheduledAt, now)));
-  return { count: row.n, last: row.last ? new Date(row.last) : null };
+    .select({
+      // Table/column names are written out with aliases on purpose: with no real table in FROM, drizzle
+      // drops qualifiers and the join below becomes ambiguous. getAlertInputs tests pin these names.
+      failed: sql<number>`(select count(*)::int from scheduled_posts sp where sp.status = 'failed')`,
+      upcoming: sql<number>`(select count(*)::int from scheduled_posts sp where sp.status = 'pending' and sp.scheduled_at >= ${now.toISOString()}::timestamptz)`,
+      unscheduled: sql<number>`(select count(*)::int from scraped_posts p left join scheduled_posts sp on sp.scraped_post_id = p.id where p.status = 'approved' and sp.id is null)`,
+      accounts: sql<number>`(select count(*)::int from ig_accounts)`,
+      tokenExpiresAt: sql<string | Date | null>`(select a.token_expires_at from ig_accounts a order by a.created_at desc limit 1)`,
+      slotsPerDay: sql<number | null>`(select array_length(s.post_slots, 1) from settings s where s.id = 1)`,
+      autoSchedule: sql<boolean | null>`(select s.auto_schedule from settings s where s.id = 1)`,
+    })
+    .from(sql`(select 1) as one`); // drizzle needs a source; every number above is its own scalar subquery
+  // no settings row yet (fresh install): create it and use the defaults
+  const fallback = row.slotsPerDay === null || row.autoSchedule === null ? await getSettings() : null;
+  return {
+    failedCount: row.failed,
+    upcomingCount: row.upcoming,
+    approvedUnscheduled: row.unscheduled,
+    hasAccount: row.accounts > 0,
+    tokenExpiresAt: row.tokenExpiresAt ? new Date(row.tokenExpiresAt) : null,
+    slotsPerDay: row.slotsPerDay ?? fallback?.postSlots.length ?? 0,
+    autoSchedule: row.autoSchedule ?? fallback?.autoSchedule ?? false,
+  };
 }
 
 /** Rejected posts old enough that we can drop their image from Cloudinary. */

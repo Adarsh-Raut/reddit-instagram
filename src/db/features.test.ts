@@ -10,11 +10,11 @@ import {
   claimForPublishing,
   clearImage,
   countByStatus,
-  countFailed,
   failStuck,
   getScheduleCaptionInfo,
   insertSchedule,
   insertScrapedPost,
+  saveIgAccount,
   listPosts,
   listStaleRejected,
   PAGE_SIZE,
@@ -22,7 +22,7 @@ import {
   saveSettings,
   setPostStatus,
   updateScheduleCaption,
-  upcomingStats,
+  getAlertInputs,
 } from "./queries";
 import * as schema from "./schema";
 import { createTestDb, resetTestDb } from "./test-db";
@@ -161,17 +161,54 @@ describe("editing scheduled posts", () => {
   });
 });
 
-describe("stats for alerts", () => {
-  it("counts failed posts and upcoming pending posts", async () => {
-    const a = await scheduledRow(1, "2026-10-17T10:00:00Z");
-    await scheduledRow(2, "2026-10-18T10:00:00Z");
-    await scheduledRow(3, "2026-10-10T10:00:00Z"); // in the past
-    await db.update(schema.scheduledPosts).set({ status: "failed" }).where(eq(schema.scheduledPosts.id, a.id));
-    expect(await countFailed()).toBe(1);
-    const s = await upcomingStats(at("2026-10-16T00:00:00Z"));
-    expect(s.count).toBe(1);
-    expect(s.last?.toISOString()).toBe("2026-10-18T10:00:00.000Z");
-    expect(await upcomingStats(at("2030-01-01T00:00:00Z"))).toEqual({ count: 0, last: null });
+describe("alert inputs (one query for the whole banner)", () => {
+  it("returns every number the banner needs", async () => {
+    const failed = await scheduledRow(1, "2026-10-17T10:00:00Z");
+    await db.update(schema.scheduledPosts).set({ status: "failed" }).where(eq(schema.scheduledPosts.id, failed.id));
+    await scheduledRow(2, "2026-10-18T10:00:00Z"); // pending and still ahead
+    await scheduledRow(3, "2026-10-10T10:00:00Z"); // pending but already in the past
+    await approved(4, 5); // approved with no time yet
+    await settings({ postSlots: ["10:00", "16:00"], autoSchedule: true });
+    const expires = at("2030-01-01T00:00:00Z");
+    await saveIgAccount({ igUserId: "1", username: "u", encryptedToken: "x", tokenExpiresAt: expires });
+
+    expect(await getAlertInputs(at("2026-10-16T00:00:00Z"))).toEqual({
+      failedCount: 1,
+      upcomingCount: 1,
+      approvedUnscheduled: 2,
+      hasAccount: true,
+      tokenExpiresAt: expires,
+      slotsPerDay: 2,
+      autoSchedule: true,
+    });
+    // the same data seen from a later time: nothing is upcoming any more
+    expect((await getAlertInputs(at("2030-01-01T00:00:00Z"))).upcomingCount).toBe(0);
+  });
+
+  it("reports zeros and no account when there is nothing yet", async () => {
+    expect(await getAlertInputs(at("2026-10-16T00:00:00Z"))).toEqual({
+      failedCount: 0,
+      upcomingCount: 0,
+      approvedUnscheduled: 0,
+      hasAccount: false,
+      tokenExpiresAt: null,
+      slotsPerDay: 3,
+      autoSchedule: false,
+    });
+  });
+
+  it("uses the newest connected account's token expiry", async () => {
+    await saveIgAccount({ igUserId: "1", username: "old", encryptedToken: "x", tokenExpiresAt: at("2027-01-01T00:00:00Z") });
+    await db.update(schema.igAccounts).set({ createdAt: at("2026-01-01T00:00:00Z") });
+    await saveIgAccount({ igUserId: "2", username: "new", encryptedToken: "x", tokenExpiresAt: at("2028-06-01T00:00:00Z") });
+    expect((await getAlertInputs(at("2026-10-16T00:00:00Z"))).tokenExpiresAt?.toISOString()).toBe("2028-06-01T00:00:00.000Z");
+  });
+
+  it("creates the settings row and uses the defaults on a fresh install", async () => {
+    await db.delete(schema.settings);
+    const r = await getAlertInputs(at("2026-10-16T00:00:00Z"));
+    expect(r).toMatchObject({ slotsPerDay: 3, autoSchedule: false });
+    expect(await db.select().from(schema.settings)).toHaveLength(1);
   });
 });
 

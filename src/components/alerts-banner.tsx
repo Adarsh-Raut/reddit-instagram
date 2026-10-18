@@ -1,12 +1,6 @@
 import { ChevronRightIcon, CircleAlertIcon, InfoIcon, TriangleAlertIcon } from "lucide-react";
 import Link from "next/link";
-import {
-  countFailed,
-  getIgAccount,
-  getSettings,
-  listApprovedUnscheduledIds,
-  upcomingStats,
-} from "@/db/queries";
+import { getAlertInputs } from "@/db/queries";
 import { computeAlerts, type Alert } from "@/lib/alerts";
 import { requireAdmin } from "@/lib/auth/session";
 import { daysUntil } from "@/lib/instagram/token";
@@ -23,21 +17,15 @@ export async function AlertsBanner() {
   await requireAdmin(); // also makes this request-time, so it can read the current time
   let alerts: Alert[];
   try {
-    const [failedCount, account, upcoming, unscheduled, settings] = await Promise.all([
-      countFailed(),
-      getIgAccount(),
-      upcomingStats(new Date()),
-      listApprovedUnscheduledIds(),
-      getSettings(),
-    ]);
+    const i = await getAlertInputs(new Date());
     alerts = computeAlerts({
-      failedCount,
-      hasAccount: account !== null,
-      tokenDaysLeft: account ? daysUntil(account.tokenExpiresAt) : null,
-      upcomingCount: upcoming.count,
-      slotsPerDay: settings.postSlots.length,
-      approvedUnscheduled: unscheduled.length,
-      autoSchedule: settings.autoSchedule,
+      failedCount: i.failedCount,
+      hasAccount: i.hasAccount,
+      tokenDaysLeft: i.tokenExpiresAt ? daysUntil(i.tokenExpiresAt) : null,
+      upcomingCount: i.upcomingCount,
+      slotsPerDay: i.slotsPerDay,
+      approvedUnscheduled: i.approvedUnscheduled,
+      autoSchedule: i.autoSchedule,
     });
   } catch {
     return null;

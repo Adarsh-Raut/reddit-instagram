@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { setDbForTests } from "./index";
 import {
   claimForPublishing,
@@ -59,6 +59,18 @@ beforeEach(async () => {
 });
 
 describe("settings", () => {
+  it("only writes when the settings row doesn't exist yet", async () => {
+    await db.delete(schema.settings);
+    const insert = vi.spyOn(db, "insert");
+    await getSettings(); // first run: creates the row
+    expect(insert).toHaveBeenCalledTimes(1);
+    insert.mockClear();
+    await getSettings();
+    await getSettings();
+    expect(insert).not.toHaveBeenCalled(); // normal page views are plain reads
+    insert.mockRestore();
+  });
+
   it("creates defaults on first read and persists updates", async () => {
     expect((await getSettings()).postSlots).toEqual(["09:00", "14:00", "20:00"]);
     await saveSettings({ subreddits: ["a"], scrapeCount: 5, postSlots: ["10:00"], timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3 });
