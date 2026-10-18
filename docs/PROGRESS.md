@@ -14,7 +14,7 @@ Nothing has been pushed to GitHub. There is no remote yet. Everything is committ
 
 | Area | What it does |
 |---|---|
-| Add your own meme | Dashboard form: upload a JPEG/PNG/WebP (max 10 MB) + title. Goes straight to Approved (auto-scheduled if that setting is on). Caption is just the title. Lets you test everything without Reddit |
+| Add your own meme | Dashboard form: upload a JPEG/PNG/WebP (max 4 MB, Vercel limits request bodies to 4.5 MB) + title. Goes straight to Approved (auto-scheduled if that setting is on). Caption is just the title. Lets you test everything without Reddit |
 | Scraper | Pulls image memes from chosen subreddits (Reddit OAuth), filters out NSFW/video/gallery/GIF/stickied, skips duplicates (Reddit id + SHA-256 of the image bytes), uploads to Cloudinary |
 | Dashboard `/` | Tabs New / Approved / Rejected / Posted with counts, 24 per page, Approve / Reject / Move back, "Scrape now" |
 | Scheduling | Next free daily slots (default 09:00, 14:00, 20:00), timezone and DST aware, never double-booked. "Schedule N approved" button, or automatic on approval (setting) |
