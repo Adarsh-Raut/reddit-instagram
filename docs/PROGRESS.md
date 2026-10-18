@@ -1,8 +1,10 @@
 # Progress log: Reddit → Instagram meme automation
 
-Last updated: 2026-10-16. Read this first when you come back to the project.
+Last updated: 2026-10-18. Read this first when you come back to the project.
 
 ## Where things stand
+
+**Update 2026-10-18 (later): UI/UX redesign.** Sidebar app shell (menu on mobile), light/dark themes, new design tokens, toasts with Undo, slide-overs for edits, named confirm dialogs for publish/disconnect, skeleton/empty/error states, search on Memes and Schedule, instant-save automation switches. Checked in the browser at 375px and 1280px (light and dark) against a scratch Postgres database (`ui_check`) with demo rows and a test-only admin password, never the real dev data. Automated: 202 tests, lint, typecheck and build pass. Not covered by automated tests: the visual components themselves (verified by hand), and real Instagram publishing.
 
 **Update 2026-10-18: deployed and verified end to end in production.**
 Live at https://reddit-instagram.vercel.app (Vercel + Neon + Inngest Cloud). Confirmed working with a real Instagram account:
@@ -13,7 +15,7 @@ Live at https://reddit-instagram.vercel.app (Vercel + Neon + Inngest Cloud). Con
 
 **Still unverified:** Reddit scraping (no Reddit API access yet), the daily auto-scrape, the token-refresh job (needs a token under 15 days from expiry), the image-cleanup job, and the failure paths against the real Instagram API (expired token, image rejected).
 
-**All planned coding is done and covered by automated tests (194 tests, lint, typecheck and production build pass).**
+**All planned coding is done and covered by automated tests (202 tests, lint, typecheck and production build pass).**
 What has *not* happened yet is a run against the real services. Everything external (Reddit, Cloudinary,
 Instagram) has only been exercised with mocks, and the database with a local Docker Postgres.
 
@@ -25,9 +27,9 @@ Nothing has been pushed to GitHub. There is no remote yet. Everything is committ
 |---|---|
 | Add your own meme | Dashboard form: upload a JPEG/PNG/WebP (max 4 MB, Vercel limits request bodies to 4.5 MB) + title. Goes straight to Approved (auto-scheduled if that setting is on). Caption is just the title. Lets you test everything without Reddit |
 | Scraper | Pulls image memes from chosen subreddits (Reddit OAuth), filters out NSFW/video/gallery/GIF/stickied, skips duplicates (Reddit id + SHA-256 of the image bytes), uploads to Cloudinary |
-| Dashboard `/` | Tabs New / Approved / Rejected / Posted with counts, 24 per page, Approve / Reject / Move back, "Scrape now" |
+| Memes `/` | Tabs New / Approved / Rejected / Posted with counts, title/author search, 24 per page, Approve / Reject / Move back with Undo toast, "Scrape now", "Add meme" slide-over |
 | Scheduling | Next free daily slots (default 09:00, 14:00, 20:00), timezone and DST aware, never double-booked. "Schedule N approved" button, or automatic on approval (setting) |
-| `/schedule` | Posts grouped by day with status, Unschedule, Publish now / Retry, edit caption and time |
+| `/schedule` | Table grouped by day (Today / Tomorrow / date), filters All / Upcoming / Posted / Failed + search, Publish now / Retry (confirm dialog), edit caption and time in a slide-over, remove from schedule |
 | `/settings` | Subreddits, memes per scrape, post times, timezone, automation switches, Instagram connection card |
 | Instagram | OAuth (Instagram Login API, no Facebook Page needed), encrypted token, container → poll → publish, credit caption by default |
 | Auto-publish | Inngest cron every 5 min: publishes the next due post (max one per run) |

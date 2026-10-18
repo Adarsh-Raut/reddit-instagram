@@ -37,7 +37,7 @@ It is built for **one admin and one Instagram account**.
 
 - **Scrapes** image memes from subreddits you choose (static JPEG/PNG/WebP only; NSFW, video, gallery, GIF and pinned posts are skipped; duplicates are detected by Reddit id and by image content).
 - **Lets you upload your own** memes (JPEG/PNG/WebP, up to 4 MB). Uploaded memes skip review and go straight to *Approved*.
-- **Review dashboard** with New / Approved / Rejected / Posted tabs, paging, and Approve / Reject buttons.
+- **Review dashboard** with New / Approved / Rejected / Posted tabs, search, paging, and Approve / Reject buttons (each action has an Undo toast).
 - **Scheduling** into daily time slots (default 09:00, 14:00, 20:00 in your timezone), either by clicking *Schedule*, or automatically when you approve a meme.
 - **Publishes to Instagram** through the official Instagram API, at the scheduled time (checked every 5 minutes), or immediately with *Publish now*.
 - **Edit before posting:** change a caption or the scheduled time, or unschedule.
@@ -51,7 +51,7 @@ It is built for **one admin and one Instagram account**.
 
 | Page | Purpose |
 |---|---|
-| `/` Dashboard | Review memes, scrape, upload, schedule |
+| `/` Memes (dashboard) | Review memes, search, scrape, upload, schedule |
 | `/schedule` | Upcoming and past posts, edit, publish now, retry |
 | `/activity` | Event log (filter to warnings and errors) |
 | `/settings` | Instagram connection, subreddits, post times, timezone, automation switches |
@@ -237,7 +237,7 @@ First-run walkthrough once the services are connected:
 2. **Get memes:** Dashboard → **Scrape now**, or **Add your own meme** (image + title; the title becomes the caption).
 3. **Review:** *Approve* or *Reject* each meme in the **New** tab.
 4. **Schedule:** *Approved* tab → **Schedule N approved** (each gets the next free time slot), unless auto-schedule is on.
-5. **Check:** the **Schedule** page lists what will go out and when. Use **Edit caption or time** to change a caption (add your own hashtags) or the time, **Unschedule** to remove one, or **Publish now** to post immediately.
+5. **Check:** the **Schedule** page lists what will go out and when. Click a post's title (or ⋯ → **Edit caption or time**) to change its caption (add your own hashtags) or time, ⋯ → **Remove from schedule** to unschedule it, or **Publish now** (after a confirmation) to post immediately.
 6. **Sit back:** the 5-minute job posts each meme at its time (up to 5 minutes late is normal).
 7. **Watch:** the **Activity** page and the alerts banner show failures, an expiring token, or a nearly empty queue.
 
@@ -277,12 +277,12 @@ Before committing, also run `npm run typecheck && npm run lint`, and `npm run bu
 ```
 src/
   app/
-    (app)/             Dashboard, /schedule, /activity, /settings (shared nav + alerts)
+    (app)/             Memes (/), /schedule, /activity, /settings (sidebar shell + alerts)
     login/             Sign-in page
     actions/           Server actions (all call requireAdmin first)
     api/inngest/       Inngest endpoint (the scheduled jobs)
     api/instagram/     OAuth connect + callback
-  components/          UI components; ui/ holds shadcn primitives
+  components/          UI components; ui/ holds the design-system primitives (button, sheet, tooltip, field...)
   db/                  schema.ts, queries.ts (all database access), tests
   inngest/             Job functions (functions.ts), job logic (jobs.ts), tests
   lib/

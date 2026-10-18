@@ -1,15 +1,14 @@
 import { Suspense } from "react";
 import { AlertsBanner } from "@/components/alerts-banner";
-import { SiteNav } from "@/components/site-nav";
+import { AppShell } from "@/components/app-shell";
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
-    <>
-      <SiteNav />
+    <AppShell>
       <Suspense>
         <AlertsBanner />
       </Suspense>
       {children}
-    </>
+    </AppShell>
   );
 }

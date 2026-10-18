@@ -109,11 +109,21 @@ Create a media container (image URL + caption) → poll its status until ready �
 - `src/app/actions` — server actions (scrape, approve/reject, schedule, settings, publish, login/logout), all behind `requireAdmin()`
 - `src/lib/schedule` — `service.ts` (schedule approved posts, auto-schedule), `local-time.ts`, `assignSlots` (pure, timezone/DST-aware slot assignment), formatting helpers
 - `src/db/queries.ts` — all DB access; `queries.test.ts` runs them against in-memory PGlite using the real migration
-- Pages (in the `(app)` route group, which adds the nav): `/` dashboard (tabs; Approved tab has the schedule form), `/schedule`, `/settings`
+- Pages (in the `(app)` route group, which adds the sidebar shell `components/app-shell.tsx`): `/` Memes (tabs, search; Approved tab has the schedule form), `/schedule`, `/activity`, `/settings`
 - `src/lib/instagram` — Instagram Login API client (`api.ts`), publish service (`publish.ts`, claims a row atomically so a post is never published twice), config. OAuth routes in `src/app/api/instagram/{connect,callback}`. Tokens are AES-GCM encrypted (`src/lib/crypto.ts`, needs `TOKEN_ENCRYPTION_KEY`).
 - `src/inngest` — client, functions, and job logic (`jobs.ts`, dependency-injected and tested). Served at `/api/inngest`.
   - `publish-due-posts` runs every 5 min: publishes at most ONE due post per run (spaces out catch-up posts), and marks posts more than 6h late as `failed` ("Missed its time slot") instead of posting them late. Failed posts are never auto-retried (avoids double posts); the user clicks Retry.
   - `refresh-instagram-token` runs daily at 03:00 UTC. `scrape-memes-daily` runs at 06:00 UTC (setting `autoScrape`). `cleanup-rejected-images` runs daily and drops Cloudinary images of memes rejected >14 days ago.
   - `publish-due-posts` also marks posts stuck in `publishing` >15 min as failed (can't know if Instagram accepted them, so a human checks before Retry).
   - To test locally: `INNGEST_DEV=1 npm run dev`, then `npx inngest-cli@latest dev -u http://localhost:3000/api/inngest`, and `curl -X PUT localhost:3000/api/inngest` to sync.
-- `src/components/ui` — shadcn components
+- `src/components/ui` — design-system primitives (shadcn base + `sheet`, `confirm-dialog`, `tooltip`/`IconButton`, `menu`, `field`, `switch`, `skeleton`, `empty-state`, `page-header`, `kbd`)
+
+## UI conventions
+
+Patterns per page (from the `page-patterns` skill): Memes and Schedule are List/Index, Activity is a feed, Settings is Settings (sticky section nav, instant-save switches, one Save per form group), Login is Form (auth).
+
+- Design tokens live in `src/app/globals.css` (one indigo accent, L0 `--background` / L1 `--card`, 1px borders + `shadow-soft`). Light and dark via `next-themes`. Type is 16/14/12px with weights 400/500/600 only.
+- Results of server actions show as toasts (`useActionToast` in `src/lib/use-action-toast.ts`); reversible actions (approve/reject) offer Undo. Publishing and disconnecting Instagram go through `ConfirmDialog`, which names the exact meme or account and focuses Cancel.
+- Short edits open in a `Sheet` slide-over, not inline `<details>` or a new page. Icon-only buttons use `IconButton` (real tooltip + `aria-label`).
+- Every data page has a layout-matched skeleton (`components/skeletons.tsx`, shown only after 100ms), an empty state with a next step, and an error state with a reload link. Copy is verb-first, sentence case and never blames the user.
+- Keep touch targets at 44px on narrow screens (`max-md:h-11` on controls) and no horizontal page overflow at 375px.

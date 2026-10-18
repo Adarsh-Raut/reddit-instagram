@@ -15,7 +15,7 @@ import { requireAdmin } from "@/lib/auth/session";
 import { getLogger } from "@/lib/log";
 import { parseLocalDateTime } from "@/lib/schedule/local-time";
 import { scheduleApprovedPosts } from "@/lib/schedule/service";
-import { settingsInput } from "@/lib/settings";
+import { automationPatch, settingsFormInput, type AutomationPatch } from "@/lib/settings";
 
 const log = getLogger("actions");
 
@@ -60,26 +60,58 @@ export async function updateSettings(
   formData: FormData,
 ): Promise<SettingsState> {
   await requireAdmin();
-  const parsed = settingsInput.safeParse({
+  const parsed = settingsFormInput.safeParse({
     subreddits: formData.get("subreddits"),
     scrapeCount: formData.get("scrapeCount"),
     postSlots: formData.get("postSlots"),
     timezone: formData.get("timezone"),
-    autoScrape: formData.get("autoScrape"),
-    autoSchedule: formData.get("autoSchedule"),
-    autoScheduleDays: formData.get("autoScheduleDays"),
   });
   if (!parsed.success) {
     return { ok: false, message: parsed.error.issues[0]?.message ?? "Invalid settings" };
   }
   try {
-    await saveSettings(parsed.data);
-    await recordActivity({ level: "info", kind: "settings.saved", message: "Settings updated", meta: { autoScrape: parsed.data.autoScrape, autoSchedule: parsed.data.autoSchedule, slots: parsed.data.postSlots, timezone: parsed.data.timezone } });
+    // the automation switches save on their own, so keep whatever they are now
+    const current = await getSettings();
+    await saveSettings({
+      ...parsed.data,
+      autoScrape: current.autoScrape,
+      autoSchedule: current.autoSchedule,
+      autoScheduleDays: current.autoScheduleDays,
+    });
+    await recordActivity({ level: "info", kind: "settings.saved", message: "Settings updated", meta: { slots: parsed.data.postSlots, timezone: parsed.data.timezone, subreddits: parsed.data.subreddits } });
     revalidatePath("/", "layout");
     return { ok: true, message: "Settings saved." };
   } catch (e) {
     log.error({ err: e }, "updateSettings failed");
-    return { ok: false, message: "Couldn’t save settings." };
+    return { ok: false, message: "We couldn’t save your settings. Check your connection and try again." };
+  }
+}
+
+/** Saves one automation change immediately (the switches in Settings → Automation). */
+export async function updateAutomation(patch: AutomationPatch): Promise<SettingsState> {
+  await requireAdmin();
+  const parsed = automationPatch.safeParse(patch);
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0]?.message ?? "That setting isn’t valid." };
+  }
+  try {
+    const current = await getSettings();
+    const next = {
+      subreddits: current.subreddits,
+      scrapeCount: current.scrapeCount,
+      postSlots: current.postSlots,
+      timezone: current.timezone,
+      autoScrape: parsed.data.autoScrape ?? current.autoScrape,
+      autoSchedule: parsed.data.autoSchedule ?? current.autoSchedule,
+      autoScheduleDays: parsed.data.autoScheduleDays ?? current.autoScheduleDays,
+    };
+    await saveSettings(next);
+    await recordActivity({ level: "info", kind: "settings.saved", message: "Automation settings updated", meta: parsed.data });
+    revalidatePath("/", "layout");
+    return { ok: true, message: "Saved." };
+  } catch (e) {
+    log.error({ err: e }, "updateAutomation failed");
+    return { ok: false, message: "We couldn’t save that change. Check your connection and try again." };
   }
 }
 

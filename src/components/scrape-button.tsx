@@ -1,27 +1,24 @@
 "use client";
 
+import { DownloadCloudIcon, LoaderCircleIcon } from "lucide-react";
 import { useActionState } from "react";
-import { Button } from "@/components/ui/button";
 import { scrapeNow, type ScrapeState } from "@/app/actions/posts";
+import { Button } from "@/components/ui/button";
+import { useActionToast } from "@/lib/use-action-toast";
 
 export function ScrapeButton() {
-  const [state, action, pending] = useActionState<ScrapeState>(
-    async () => scrapeNow(),
-    null,
-  );
+  const [state, action, pending] = useActionState<ScrapeState>(async () => scrapeNow(), null);
+  useActionToast(state);
   return (
-    <form action={action} className="flex items-center gap-3">
-      <Button type="submit" disabled={pending}>
+    <form action={action}>
+      <Button type="submit" disabled={pending} aria-busy={pending}>
+        {pending ? (
+          <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
+        ) : (
+          <DownloadCloudIcon data-icon="inline-start" />
+        )}
         {pending ? "Scraping…" : "Scrape now"}
       </Button>
-      {state && (
-        <p
-          role="status"
-          className={state.ok ? "text-sm text-muted-foreground" : "text-sm text-destructive"}
-        >
-          {state.message}
-        </p>
-      )}
     </form>
   );
 }

@@ -1,3 +1,4 @@
+import { ChevronRightIcon, CircleAlertIcon, InfoIcon, TriangleAlertIcon } from "lucide-react";
 import Link from "next/link";
 import {
   countFailed,
@@ -9,11 +10,12 @@ import {
 import { computeAlerts, type Alert } from "@/lib/alerts";
 import { requireAdmin } from "@/lib/auth/session";
 import { daysUntil } from "@/lib/instagram/token";
+import { cn } from "@/lib/utils";
 
-const STYLE: Record<Alert["level"], string> = {
-  error: "border-destructive/50 bg-destructive/10 text-destructive",
-  warn: "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  info: "border-border bg-muted text-muted-foreground",
+const STYLE: Record<Alert["level"], { box: string; icon: typeof InfoIcon; label: string }> = {
+  error: { box: "border-destructive/30 bg-destructive/10 text-destructive", icon: CircleAlertIcon, label: "Problem" },
+  warn: { box: "border-warning/30 bg-warning/10 text-warning", icon: TriangleAlertIcon, label: "Warning" },
+  info: { box: "border-border bg-card text-foreground", icon: InfoIcon, label: "Note" },
 };
 
 /** Things that need attention. Renders nothing when all is well or the DB isn't reachable. */
@@ -41,15 +43,44 @@ export async function AlertsBanner() {
     return null;
   }
   if (alerts.length === 0) return null;
+  const [top, ...rest] = alerts;
   return (
-    <ul className="mx-auto max-w-5xl space-y-2 px-6 pt-4" aria-label="Alerts">
-      {alerts.map((a) => (
-        <li key={a.text} className={`rounded-md border px-3 py-2 text-sm ${STYLE[a.level]}`}>
-          <Link href={a.href} className="hover:underline">
-            {a.text}
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-2" role="region" aria-label="Needs your attention">
+      <AlertLink alert={top} />
+      {rest.length > 0 && (
+        <details className="group">
+          <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground max-md:min-h-11 [&::-webkit-details-marker]:hidden">
+            <ChevronRightIcon className="size-4 transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" aria-hidden />
+            {rest.length} more {rest.length === 1 ? "notice" : "notices"}
+          </summary>
+          <ul className="mt-1 space-y-2">
+            {rest.map((a) => (
+              <li key={a.text}>
+                <AlertLink alert={a} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function AlertLink({ alert: a }: { alert: Alert }) {
+  const s = STYLE[a.level];
+  const Icon = s.icon;
+  return (
+    <Link
+      href={a.href}
+      className={cn(
+        "flex min-h-11 items-center gap-3 rounded-lg border px-3 py-2 text-sm transition-colors duration-150 ease-out hover:brightness-95 motion-reduce:transition-none dark:hover:brightness-110",
+        s.box,
+      )}
+    >
+      <Icon className="size-4 shrink-0" aria-hidden />
+      <span className="sr-only">{s.label}: </span>
+      <span className="flex-1 font-medium">{a.text}</span>
+      <ChevronRightIcon className="size-4 shrink-0 opacity-60" aria-hidden />
+    </Link>
   );
 }

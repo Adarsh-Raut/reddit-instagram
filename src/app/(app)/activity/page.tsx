@@ -1,16 +1,35 @@
+import { CircleAlertIcon, CircleCheckIcon, OctagonXIcon, TriangleAlertIcon } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Pagination } from "@/components/pagination";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { RowsSkeleton } from "@/components/skeletons";
+import { TabNav } from "@/components/tab-nav";
+import { buttonVariants } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { ACTIVITY_PAGE_SIZE, countActivity, getSettings, listActivity } from "@/db/queries";
 import { requireAdmin } from "@/lib/auth/session";
 import { getLogger } from "@/lib/log";
 import { formatInTimezone } from "@/lib/schedule/slots";
+import { cn } from "@/lib/utils";
 
 const log = getLogger("pages");
 
-const LEVEL_VARIANT = { info: "secondary", warn: "outline", error: "destructive" } as const;
+export const metadata = { title: "Activity" };
+
+const LEVELS = {
+  info: { icon: CircleCheckIcon, label: "Info", tone: "text-muted-foreground", bar: "bg-border" },
+  warn: { icon: TriangleAlertIcon, label: "Warning", tone: "text-warning", bar: "bg-warning" },
+  error: { icon: OctagonXIcon, label: "Error", tone: "text-destructive", bar: "bg-destructive" },
+} as const;
+
+function hrefFor(onlyProblems: boolean, page = 1) {
+  const q = new URLSearchParams();
+  if (onlyProblems) q.set("filter", "problems");
+  if (page > 1) q.set("page", String(page));
+  const qs = q.toString();
+  return qs ? `/activity?${qs}` : "/activity";
+}
 
 async function ActivityList({ searchParams }: { searchParams: PageProps<"/activity">["searchParams"] }) {
   await requireAdmin();
@@ -28,79 +47,95 @@ async function ActivityList({ searchParams }: { searchParams: PageProps<"/activi
   } catch (e) {
     log.error({ err: e }, "Activity load failed");
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Couldn’t load the activity log</CardTitle>
-          <CardDescription>Check DATABASE_URL and that the migration has been applied.</CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="rounded-xl border bg-card">
+        <EmptyState
+          title="We couldn’t load the activity log"
+          description="The database didn’t respond, so nothing was lost. Reload to try again. If it keeps happening, check the server logs."
+        >
+          <Link href={hrefFor(onlyProblems)} className={buttonVariants({ variant: "outline" })}>
+            Reload page
+          </Link>
+        </EmptyState>
+      </div>
     );
   }
 
-  const tab = (active: boolean) =>
-    active
-      ? "border-b-2 border-foreground px-3 py-2 text-sm font-medium"
-      : "px-3 py-2 text-sm text-muted-foreground hover:text-foreground";
-
   return (
     <>
-      <nav className="flex gap-2 border-b" aria-label="Filter">
-        <Link href="/activity" className={tab(!onlyProblems)}>
-          All
-        </Link>
-        <Link href="/activity?filter=problems" className={tab(onlyProblems)}>
-          Warnings and errors
-        </Link>
-      </nav>
-      {data.rows.length === 0 ? (
-        <p className="py-12 text-center text-sm text-muted-foreground">
-          {onlyProblems ? "No warnings or errors. All good." : "Nothing has happened yet."}
-        </p>
-      ) : (
-        <ul className="divide-y rounded-lg border">
-          {data.rows.map((r) => (
-            <li key={r.id} className="space-y-1 p-3 text-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={LEVEL_VARIANT[r.level as keyof typeof LEVEL_VARIANT] ?? "secondary"}>{r.level}</Badge>
-                <span className="text-xs text-muted-foreground">{formatInTimezone(r.at, data.timezone)}</span>
-                <code className="text-xs text-muted-foreground">{r.kind}</code>
-              </div>
-              <p>{r.message}</p>
-              {r.meta != null && (
-                <details className="text-xs text-muted-foreground">
-                  <summary className="cursor-pointer">Details</summary>
-                  <pre className="mt-1 overflow-x-auto rounded bg-muted p-2">{JSON.stringify(r.meta, null, 2)}</pre>
-                </details>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      <Pagination
-        page={data.page}
-        totalPages={data.totalPages}
-        hrefFor={(p) => {
-          const q = new URLSearchParams();
-          if (onlyProblems) q.set("filter", "problems");
-          if (p > 1) q.set("page", String(p));
-          const qs = q.toString();
-          return qs ? `/activity?${qs}` : "/activity";
-        }}
+      <TabNav
+        label="Activity filter"
+        items={[
+          { href: hrefFor(false), label: "All activity", active: !onlyProblems },
+          { href: hrefFor(true), label: "Warnings and errors", active: onlyProblems },
+        ]}
       />
+      <div className="overflow-hidden rounded-xl border bg-card shadow-soft">
+        {data.rows.length === 0 ? (
+          onlyProblems ? (
+            <EmptyState
+              icon={CircleCheckIcon}
+              title="No warnings or errors"
+              description="Everything that has run recently finished without problems."
+            >
+              <Link href="/activity" className={buttonVariants({ variant: "outline" })}>
+                Show all activity
+              </Link>
+            </EmptyState>
+          ) : (
+            <EmptyState
+              icon={CircleAlertIcon}
+              title="Nothing has happened yet"
+              description="Scrapes, posts, sign-ins and errors will be listed here as they happen."
+            />
+          )
+        ) : (
+          <ol className="divide-y">
+            {data.rows.map((r) => {
+              const level = LEVELS[r.level as keyof typeof LEVELS] ?? LEVELS.info;
+              const Icon = level.icon;
+              return (
+                <li key={r.id} className="relative flex gap-3 py-3 pr-4 pl-5">
+                  <span className={cn("absolute inset-y-0 left-0 w-1", level.bar)} aria-hidden />
+                  <Icon className={cn("mt-0.5 size-4 shrink-0", level.tone)} aria-hidden />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="text-sm">
+                      <span className="sr-only">{level.label}: </span>
+                      {r.message}
+                    </p>
+                    <p className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                      <time dateTime={r.at.toISOString()}>{formatInTimezone(r.at, data.timezone)}</time>
+                      <code className="font-mono">{r.kind}</code>
+                    </p>
+                    {r.meta != null && (
+                      <details className="text-xs text-muted-foreground">
+                        <summary className="inline-flex min-h-6 cursor-pointer items-center hover:text-foreground max-md:min-h-11">
+                          Show details
+                        </summary>
+                        <pre className="mt-1 overflow-x-auto rounded-md bg-muted p-3 font-mono">{JSON.stringify(r.meta, null, 2)}</pre>
+                      </details>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+      <Pagination page={data.page} totalPages={data.totalPages} hrefFor={(p) => hrefFor(onlyProblems, p)} />
     </>
   );
 }
 
 export default function ActivityPage({ searchParams }: PageProps<"/activity">) {
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-6">
-      <h1 className="text-2xl font-semibold">Activity</h1>
-      <p className="text-sm text-muted-foreground">
-        What the app has done: posts, scrapes, logins and errors. Entries are kept for 90 days.
-      </p>
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+    <>
+      <PageHeader
+        title="Activity"
+        description="Everything the app has done: scrapes, posts, sign-ins and errors. Entries are kept for 90 days."
+      />
+      <Suspense fallback={<RowsSkeleton label="Loading activity" rows={8} />}>
         <ActivityList searchParams={searchParams} />
       </Suspense>
-    </main>
+    </>
   );
 }

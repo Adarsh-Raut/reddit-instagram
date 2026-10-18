@@ -1,16 +1,19 @@
+"use client";
+
+import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
+import { toast } from "sonner";
 import { disconnectInstagram } from "@/app/actions/instagram";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { IgAccount } from "@/db/queries";
 
 const NOTICES: Record<string, { ok: boolean; text: string }> = {
-  connected: { ok: true, text: "Instagram connected." },
-  denied: { ok: false, text: "Instagram access was denied." },
-  "bad-state": { ok: false, text: "Login session expired or didn’t match. Please try again." },
-  "not-configured": { ok: false, text: "Set INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET in .env.local first." },
-  error: { ok: false, text: "Couldn’t connect Instagram. Check the server logs." },
+  connected: { ok: true, text: "Instagram is connected. Scheduled posts will go out on time." },
+  denied: { ok: false, text: "Instagram access wasn’t granted. Connect again and approve the permissions." },
+  "bad-state": { ok: false, text: "The sign-in session expired. Connect Instagram again to continue." },
+  "not-configured": { ok: false, text: "Add INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET to .env.local, then restart the server." },
+  error: { ok: false, text: "We couldn’t connect Instagram. Try again, or check the server logs." },
 };
 
 export function InstagramCard({
@@ -25,40 +28,71 @@ export function InstagramCard({
 }) {
   const n = notice ? NOTICES[notice] : undefined;
   const expired = daysLeft !== null && daysLeft <= 0;
+  const handle = account ? `@${account.username ?? account.igUserId}` : "";
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          Instagram
-          {account && <Badge variant={expired ? "destructive" : "secondary"}>{expired ? "Expired" : "Connected"}</Badge>}
-        </CardTitle>
-        <CardDescription>
-          {account
-            ? `@${account.username ?? account.igUserId}${daysLeft !== null && !expired ? ` · token valid for ${daysLeft} more days` : ""}`
-            : "Connect a Business or Creator account to publish memes."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {n && (
-          <p role="status" className={n.ok ? "text-sm text-muted-foreground" : "text-sm text-destructive"}>
-            {n.text}
-          </p>
-        )}
-        <div className="flex gap-2">
-          {/* plain link: this starts an OAuth redirect, not a client navigation */}
-          <a
-            href="/api/instagram/connect"
-            className={cn(buttonVariants({ variant: account && !expired ? "outline" : "default" }))}
-          >
-            {account ? "Reconnect" : "Connect Instagram"}
-          </a>
-          {account && (
-            <form action={disconnectInstagram}>
-              <Button type="submit" variant="outline">Disconnect</Button>
-            </form>
+    <div className="space-y-4">
+      {n && (
+        <p
+          role="status"
+          className={cn(
+            "flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm",
+            n.ok ? "border-success/30 bg-success/10 text-success" : "border-destructive/30 bg-destructive/10 text-destructive",
+          )}
+        >
+          {n.ok ? <CircleCheckIcon className="mt-0.5 size-4 shrink-0" aria-hidden /> : <CircleAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden />}
+          {n.text}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0 space-y-1">
+          {account ? (
+            <>
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <span className={cn("size-2 rounded-full", expired ? "bg-destructive" : "bg-success")} aria-hidden />
+                {handle}
+                <span className={cn("font-normal", expired ? "text-destructive" : "text-muted-foreground")}>
+                  {expired ? "Connection expired" : "Connected"}
+                </span>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {expired
+                  ? "Reconnect to resume posting. Nothing is published while the connection is expired."
+                  : daysLeft !== null
+                    ? `Renews automatically. The current sign-in is valid for ${daysLeft} more ${daysLeft === 1 ? "day" : "days"}.`
+                    : "Posts are published to this account."}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium">Not connected</p>
+              <p className="max-w-prose text-sm text-muted-foreground">
+                Connect an Instagram Business or Creator account to publish memes. Nothing is posted until you do.
+              </p>
+            </>
           )}
         </div>
-      </CardContent>
-    </Card>
+        <div className="flex gap-2">
+          {/* plain link: this starts an OAuth redirect, not a client navigation */}
+          <a href="/api/instagram/connect" className={buttonVariants({ variant: account && !expired ? "outline" : "default" })}>
+            {account ? "Reconnect Instagram" : "Connect Instagram"}
+          </a>
+          {account && (
+            <ConfirmDialog
+              trigger={<Button variant="outline">Disconnect</Button>}
+              title={`Disconnect ${handle}?`}
+              description="Scheduled posts stay in the queue but won’t be published until you connect an account again."
+              confirmLabel={`Disconnect ${handle}`}
+              destructive
+              onConfirm={() => {
+                disconnectInstagram().then(
+                  () => toast("Instagram disconnected"),
+                  () => toast.error("We couldn’t disconnect Instagram. Try again."),
+                );
+              }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
