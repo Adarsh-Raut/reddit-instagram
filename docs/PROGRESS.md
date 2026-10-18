@@ -161,5 +161,14 @@ npm run admin:setup
 docker compose up -d db
 ```
 
+## Choosing post times (engagement)
+These are rules of thumb, not measured results for this account.
+- Weekdays: late morning (about 10:00-12:00), lunch (12:00-14:00) and evening (19:00-22:00). Weekends: later mornings and evenings.
+- Memes tend to do best in the evening and on lunch breaks.
+- Use the audience's local time: check that the timezone in Settings matches where most followers live.
+- Current default slots are 09:00, 14:00, 20:00. Suggested experiment: move 09:00 to about 11:00-12:00 and add a late slot around 21:30.
+- Find the real answer in Instagram → Insights → Total followers → Most active times, then after a few weeks compare reach and likes per post by slot. Keep times slightly varied (spam flags).
+- Slots are a setting (`/settings`), so nothing in code needs to change.
+
 ## Ideas for later
 AI captions and hashtags, Reels/video, email or push alerts, multiple Instagram accounts, per-subreddit quality filters (min score), analytics on which memes perform.
