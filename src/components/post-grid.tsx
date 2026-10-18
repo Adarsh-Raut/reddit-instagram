@@ -22,7 +22,7 @@ export function PostGrid({
 }) {
   return (
     <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {posts.map((p) => (
+      {posts.map((p, index) => (
         <li key={p.id}>
           <article className="flex h-full flex-col overflow-hidden rounded-xl border bg-card shadow-soft">
             <div className="relative aspect-square border-b bg-muted">
@@ -32,6 +32,9 @@ export function PostGrid({
                   alt={p.title}
                   fill
                   sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                  // the first row is above the fold: load it right away instead of waiting for lazy-load
+                  loading={index < 3 ? "eager" : "lazy"}
+                  fetchPriority={index < 3 ? "high" : "auto"}
                   className="object-contain"
                 />
               ) : (

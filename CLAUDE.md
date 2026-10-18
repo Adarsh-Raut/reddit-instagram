@@ -34,7 +34,7 @@ Out of scope for now: AI captions and hashtags (planned later), video/Reels.
 - Next.js (App Router) + TypeScript
 - Tailwind CSS + shadcn/ui
 - Postgres with Drizzle ORM: Neon in production, local Docker container in dev (driver is picked from the `DATABASE_URL` host in `src/db/index.ts`)
-- Cloudinary for image storage (Instagram needs a public JPEG URL)
+- Cloudinary for image storage (Instagram needs a public JPEG URL). On-screen images are resized by Cloudinary itself via a global `next/image` loader (`src/lib/image-loader.ts`, `cloudinary-delivery.ts`), not by the Next/Vercel optimizer; `next.config.ts` allows only widths 96/480/960/1280 because each distinct width is one billed Cloudinary transformation (free plan: 1 credit = 1,000 transformations, 1 GB storage or 1 GB bandwidth). Do not add widths or per-image `loader` props casually.
 - Inngest for scheduling and background jobs (Vercel free-tier cron is daily only)
 - Hosting: Vercel
 
