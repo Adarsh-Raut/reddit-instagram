@@ -15,6 +15,9 @@ import { toLocalInputValue } from "@/lib/schedule/local-time";
 import { dayKey, formatInTimezone } from "@/lib/schedule/slots";
 
 const log = getLogger("pages");
+// Publish now runs as a server action of this page and can take ~30s
+export const maxDuration = 60;
+
 const STATUS_VARIANT = {
   pending: "secondary",
   publishing: "default",

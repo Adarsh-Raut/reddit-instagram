@@ -6,7 +6,7 @@ import {
 } from "@/db/queries";
 import { recordActivity } from "@/lib/activity";
 import { uploadRemoteImage } from "@/lib/cloudinary";
-import { getEnv } from "@/lib/env";
+import { getRedditEnv } from "@/lib/env";
 import { fetchSubredditImages, getAccessToken } from "./client";
 import { scrapeMemes, type ScrapeResult } from "./scrape";
 
@@ -14,7 +14,7 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 /** Wires the scraper to the real Reddit, Cloudinary and database. */
 export async function runScrape(): Promise<ScrapeResult> {
-  const env = getEnv();
+  const env = getRedditEnv();
   const { subreddits, scrapeCount } = await getSettings();
   const token = await getAccessToken({
     clientId: env.REDDIT_CLIENT_ID,

@@ -4,7 +4,7 @@ Last updated: 2026-10-16. Read this first when you come back to the project.
 
 ## Where things stand
 
-**All planned coding is done and covered by automated tests (192 tests, lint, typecheck and production build pass).**
+**All planned coding is done and covered by automated tests (194 tests, lint, typecheck and production build pass).**
 What has *not* happened yet is a run against the real services. Everything external (Reddit, Cloudinary,
 Instagram) has only been exercised with mocks, and the database with a local Docker Postgres.
 
@@ -57,7 +57,10 @@ Meta app checklist (still to finish in the Meta dashboard):
 3. Instagram account is Business/Creator, public, and added as an **Instagram Tester** (App roles → Roles); accept the invite in the Instagram app.
 4. In "Set up Instagram business login", add the redirect URI `http://localhost:3000/api/instagram/callback`. If Meta rejects http://localhost, use an HTTPS tunnel and set `APP_URL` to it.
 
-## Meta needs HTTPS: use a tunnel (confirmed)
+## Deployment plan
+The ngrok tunnel was ruled out (the account's tunnel is used by another service), so testing happens on Vercel. Follow **docs/DEPLOY.md** step by step.
+
+## Meta needs HTTPS (confirmed): tunnel notes, kept for reference
 Meta rejected `http://localhost:3000/api/instagram/callback` ("Error saving redirect URIs"). Use an HTTPS tunnel; `ngrok` (already logged in on this Mac) and `cloudflared` are installed.
 
 1. ngrok dashboard → Domains → copy your free static domain, e.g. `something.ngrok-free.app`

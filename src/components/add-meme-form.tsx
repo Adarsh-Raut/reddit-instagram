@@ -11,7 +11,7 @@ export function AddMemeForm() {
       <summary className="cursor-pointer font-medium">Add your own meme</summary>
       <form action={action} className="mt-3 space-y-3">
         <label className="block space-y-1">
-          <span className="text-xs font-medium">Image (JPEG, PNG or WebP, up to 10 MB)</span>
+          <span className="text-xs font-medium">Image (JPEG, PNG or WebP, up to 4 MB)</span>
           <input type="file" name="image" accept="image/jpeg,image/png,image/webp" required className="block w-full text-sm" />
         </label>
         <label className="block space-y-1">

@@ -11,6 +11,9 @@ import { Pagination } from "@/components/pagination";
 import { countByStatus, getSettings, listPosts, PAGE_SIZE, type PostStatus } from "@/db/queries";
 
 const log = getLogger("pages");
+// Scrape now and image uploads run as server actions of this page
+export const maxDuration = 60;
+
 const TABS: { status: PostStatus; label: string }[] = [
   { status: "new", label: "New" },
   { status: "approved", label: "Approved" },

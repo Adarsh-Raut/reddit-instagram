@@ -56,7 +56,7 @@ describe("addManualMeme", () => {
     ["too-long title", { bytes: JPEG, title: "a".repeat(201) }, /title/],
     ["no file", { bytes: Buffer.alloc(0), title: "x" }, /Choose an image/],
     ["not an image", { bytes: Buffer.from("just text"), title: "x" }, /JPEG, PNG or WebP/],
-    ["too big", { bytes: Buffer.concat([JPEG, Buffer.alloc(MAX_UPLOAD_BYTES)]), title: "x" }, /10 MB/],
+    ["too big", { bytes: Buffer.concat([JPEG, Buffer.alloc(MAX_UPLOAD_BYTES)]), title: "x" }, /4 MB/],
   ])("rejects %s without touching Cloudinary or the database", async (_n, input, msg) => {
     const d = deps();
     const r = await addManualMeme(input, d);

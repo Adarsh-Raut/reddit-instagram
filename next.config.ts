@@ -15,8 +15,8 @@ const nextConfig: NextConfig = {
   // pino loads files at runtime, so keep it out of the bundle
   serverExternalPackages: ["pino", "pino-pretty"],
   allowedDevOrigins: appHost && appHost !== "localhost" ? [appHost] : [],
-  // image uploads from the dashboard (the app itself limits files to 10MB)
-  experimental: { serverActions: { bodySizeLimit: "11mb" } },
+  // image uploads from the dashboard (the app limits files to 4MB; Vercel allows 4.5MB bodies)
+  experimental: { serverActions: { bodySizeLimit: "5mb" } },
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

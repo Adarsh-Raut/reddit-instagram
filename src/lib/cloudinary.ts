@@ -1,8 +1,8 @@
 import { v2 as cloudinary } from "cloudinary";
-import { getEnv } from "./env";
+import { getCloudinaryEnv } from "./env";
 
 function configure() {
-  const env = getEnv();
+  const env = getCloudinaryEnv();
   cloudinary.config({
     cloud_name: env.CLOUDINARY_CLOUD_NAME,
     api_key: env.CLOUDINARY_API_KEY,

@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+// Vercel rejects request bodies over 4.5 MB, so uploads are capped just under that.
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 export const MANUAL_SUBREDDIT = "manual";
 
 export type ImageMime = "image/jpeg" | "image/png" | "image/webp";
@@ -42,7 +43,7 @@ export async function addManualMeme(
   const title = input.title.trim();
   if (title.length < 1 || title.length > 200) return { ok: false, message: "Give the meme a title of 1 to 200 characters." };
   if (input.bytes.length === 0) return { ok: false, message: "Choose an image file." };
-  if (input.bytes.length > MAX_UPLOAD_BYTES) return { ok: false, message: "That image is larger than 10 MB." };
+  if (input.bytes.length > MAX_UPLOAD_BYTES) return { ok: false, message: "That image is larger than 4 MB." };
   const mime = sniffImage(input.bytes);
   if (!mime) return { ok: false, message: "Only JPEG, PNG or WebP images are supported." };
 
