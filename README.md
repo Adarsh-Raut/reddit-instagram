@@ -41,6 +41,7 @@ It is built for **one admin and one Instagram account**.
 - **Scheduling** into daily time slots (default 09:00, 14:00, 20:00 in your timezone), either by clicking *Schedule*, or automatically when you approve a meme.
 - **Publishes to Instagram** through the official Instagram API, at the scheduled time (checked every 5 minutes), or immediately with *Publish now*.
 - **Edit before posting:** change a caption or the scheduled time, or unschedule.
+- **Month calendar:** the Schedule page has a List / Month switch. The month grid shows every day's posts (thumbnails or status dots), highlights today, and marks planned days that have fewer posts than your daily post times (like "2 of 3") so gaps are easy to spot. Click a day to see, edit, preview or publish its posts; older posted days stay visible here.
 - **Instagram preview:** see the exact image and caption that will be sent (with size, character and hashtag counts, and warnings for anything Instagram would reject) before it goes out. Open it from a post's ⋯ menu on the Schedule page (Edit → Preview tab) or the **Preview** button on Approved memes.
 - **Safety nets:** never posts the same meme twice, never posts one that is more than 6 hours late, flags posts that got stuck, and shows alerts for anything needing attention.
 - **Activity log** page recording what the app did (posted, failed, scraped, logins...) for 90 days.

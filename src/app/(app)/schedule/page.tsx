@@ -1,21 +1,32 @@
-import { CalendarClockIcon, SearchXIcon } from "lucide-react";
+import { CalendarClockIcon, ChevronLeftIcon, ChevronRightIcon, SearchXIcon } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ScheduleRow, type ScheduleRowData } from "@/components/schedule-row";
+import { monthHref, ScheduleCalendar, ViewToggle } from "@/components/schedule-calendar";
+import { groupScheduleItems, ScheduleTable } from "@/components/schedule-table";
 import { SearchInput } from "@/components/search-input";
 import { RowsSkeleton } from "@/components/skeletons";
 import { TabNav } from "@/components/tab-nav";
 import { buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { getIgAccount, getSettings, listSchedule, type ScheduleItem } from "@/db/queries";
+import { getIgAccount, getSettings, lastPendingAt, listSchedule, listScheduleBetween, type ScheduleItem } from "@/db/queries";
 import { requireAdmin } from "@/lib/auth/session";
-import { buildCaption } from "@/lib/instagram/caption";
-import { previewImageUrl } from "@/lib/instagram/preview-url";
 import { getLogger } from "@/lib/log";
-import { sourceLabel } from "@/lib/memes/manual";
-import { toLocalInputValue } from "@/lib/schedule/local-time";
-import { dayKey, formatDayHeading, formatTime } from "@/lib/schedule/slots";
+import {
+  addDays,
+  dayLabel,
+  dayRange,
+  gridRange,
+  monthGrid,
+  monthOfKey,
+  monthParam,
+  monthTitle,
+  parseDayKey,
+  parseMonth,
+  shortDayLabel,
+  summarizeDays,
+} from "@/lib/schedule/calendar";
+import { dayKey } from "@/lib/schedule/slots";
 
 const log = getLogger("pages");
 // Publish now runs as a server action of this page and can take ~30s
@@ -30,6 +41,9 @@ const FILTERS = [
   { key: "failed", label: "Failed" },
 ] as const;
 type Filter = (typeof FILTERS)[number]["key"];
+
+type SearchParams = PageProps<"/schedule">["searchParams"];
+type Shared = { timezone: string; username: string | null; slotsPerDay: number };
 
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
@@ -48,32 +62,32 @@ function hrefFor(filter: Filter, q: string) {
   return qs ? `/schedule?${qs}` : "/schedule";
 }
 
-async function ScheduleList({ searchParams }: { searchParams: PageProps<"/schedule">["searchParams"] }) {
-  await requireAdmin();
-  const params = await searchParams;
+function LoadError({ href }: { href: string }) {
+  return (
+    <div className="rounded-xl border bg-card">
+      <EmptyState
+        title="We couldn’t load the schedule"
+        description="The database didn’t respond, so nothing was lost. Reload to try again. If it keeps happening, check the server logs."
+      >
+        <Link href={href} className={buttonVariants({ variant: "outline" })}>
+          Reload page
+        </Link>
+      </EmptyState>
+    </div>
+  );
+}
+
+async function ListView({ params, shared }: { params: Awaited<SearchParams>; shared: Shared }) {
+  const { timezone, username } = shared;
   const filter = FILTERS.find((f) => f.key === first(params.filter))?.key ?? "all";
   const q = first(params.q).trim().slice(0, 100);
 
-  let items: ScheduleItem[], timezone: string, username: string | null;
+  let items: ScheduleItem[];
   try {
-    const [settings, account] = await Promise.all([getSettings(), getIgAccount()]);
-    timezone = settings.timezone;
-    username = account?.username ?? null;
     items = await listSchedule();
   } catch (e) {
     log.error({ err: e }, "Schedule load failed");
-    return (
-      <div className="rounded-xl border bg-card">
-        <EmptyState
-          title="We couldn’t load the schedule"
-          description="The database didn’t respond, so nothing was lost. Reload to try again. If it keeps happening, check the server logs."
-        >
-          <Link href={hrefFor(filter, q)} className={buttonVariants({ variant: "outline" })}>
-            Reload page
-          </Link>
-        </EmptyState>
-      </div>
-    );
+    return <LoadError href={hrefFor(filter, q)} />;
   }
 
   const counts = {
@@ -86,30 +100,13 @@ async function ScheduleList({ searchParams }: { searchParams: PageProps<"/schedu
   const visible = items.filter(
     (i) => matches(i, filter) && (!needle || i.post.title.toLowerCase().includes(needle) || i.caption.toLowerCase().includes(needle)),
   );
-
-  const now = new Date();
-  const days = new Map<string, { heading: string; rows: ScheduleRowData[] }>();
-  for (const it of visible) {
-    const k = dayKey(it.scheduledAt, timezone);
-    const group = days.get(k) ?? { heading: formatDayHeading(it.scheduledAt, timezone, now), rows: [] };
-    group.rows.push({
-      id: it.id,
-      title: it.post.title,
-      source: sourceLabel(it.post),
-      imageUrl: it.post.cloudinaryUrl,
-      time: formatTime(it.scheduledAt, timezone),
-      whenValue: toLocalInputValue(it.scheduledAt, timezone),
-      status: it.status,
-      error: it.error,
-      caption: it.caption,
-      defaultCaption: buildCaption(it.post),
-      previewUrl: previewImageUrl(it.post.cloudinaryPublicId),
-    });
-    days.set(k, group);
-  }
+  const groups = groupScheduleItems(visible, timezone, new Date());
 
   return (
     <>
+      <div className="flex justify-end">
+        <ViewToggle active="list" />
+      </div>
       <TabNav
         label="Schedule status"
         items={FILTERS.map((f) => ({ href: hrefFor(f.key, q), label: f.label, count: counts[f.key], active: f.key === filter }))}
@@ -149,30 +146,7 @@ async function ScheduleList({ searchParams }: { searchParams: PageProps<"/schedu
             </EmptyState>
           )
         ) : (
-          <div className="md:overflow-x-auto">
-            <table className="w-full text-left max-md:block md:min-w-[40rem]">
-              <thead className="border-b bg-muted/40 text-xs text-muted-foreground max-md:hidden">
-                <tr>
-                  <th scope="col" className="py-2.5 pr-3 pl-4 font-medium">Meme</th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">Time</th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">Status</th>
-                  <th scope="col" className="py-2.5 pr-4 pl-3 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              {[...days.entries()].map(([key, group]) => (
-                <tbody key={key} className="divide-y border-b last:border-b-0 max-md:block">
-                  <tr className="bg-muted/20 max-md:block">
-                    <th scope="colgroup" colSpan={4} className="py-2 pr-3 pl-4 text-sm font-semibold">
-                      {group.heading}
-                    </th>
-                  </tr>
-                  {group.rows.map((row) => (
-                    <ScheduleRow key={row.id} row={row} timezone={timezone} username={username} />
-                  ))}
-                </tbody>
-              ))}
-            </table>
-          </div>
+          <ScheduleTable groups={groups} timezone={timezone} username={username} />
         )}
       </div>
       <p className="text-sm text-muted-foreground">
@@ -182,15 +156,133 @@ async function ScheduleList({ searchParams }: { searchParams: PageProps<"/schedu
   );
 }
 
+async function MonthView({ params, shared }: { params: Awaited<SearchParams>; shared: Shared }) {
+  const { timezone, slotsPerDay } = shared;
+  const todayKey = dayKey(new Date(), timezone);
+  const month = parseMonth(first(params.month), todayKey);
+  const grid = monthGrid(month);
+  const { from, to } = gridRange(grid, timezone);
+
+  let items: ScheduleItem[], lastPending: Date | null;
+  try {
+    [items, lastPending] = await Promise.all([listScheduleBetween(from, to), lastPendingAt()]);
+  } catch (e) {
+    log.error({ err: e }, "Calendar load failed");
+    return <LoadError href={monthHref(month)} />;
+  }
+
+  const summaries = summarizeDays(items, timezone, {
+    slotsPerDay,
+    todayKey,
+    lastPlannedKey: lastPending ? dayKey(lastPending, timezone) : null,
+  });
+  const itemsByDay = new Map<string, ScheduleItem[]>();
+  for (const it of items) {
+    const k = dayKey(it.scheduledAt, timezone);
+    itemsByDay.set(k, [...(itemsByDay.get(k) ?? []), it]);
+  }
+  const total = items.filter((it) => dayKey(it.scheduledAt, timezone).startsWith(monthParam(month))).length;
+
+  return (
+    <ScheduleCalendar
+      month={month}
+      grid={grid}
+      summaries={summaries}
+      itemsByDay={itemsByDay}
+      todayKey={todayKey}
+      slotsPerDay={slotsPerDay}
+      timezone={timezone}
+      total={total}
+    />
+  );
+}
+
+async function DayView({ day, shared }: { day: string; shared: Shared }) {
+  const { timezone, username } = shared;
+  const month = monthOfKey(day);
+  const { from, to } = dayRange(day, timezone);
+
+  let items: ScheduleItem[];
+  try {
+    items = await listScheduleBetween(from, to);
+  } catch (e) {
+    log.error({ err: e }, "Day load failed");
+    return <LoadError href={`/schedule?day=${day}`} />;
+  }
+
+  const btn = buttonVariants({ variant: "outline", size: "sm" });
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={monthHref(month)} className={btn}>
+            <ChevronLeftIcon data-icon="inline-start" />
+            {monthTitle(month)}
+          </Link>
+          <Link href={`/schedule?day=${addDays(day, -1)}`} className={btn} aria-label={`Previous day, ${dayLabel(addDays(day, -1))}`}>
+            <ChevronLeftIcon data-icon="inline-start" />
+            {shortDayLabel(addDays(day, -1))}
+          </Link>
+          <Link href={`/schedule?day=${addDays(day, 1)}`} className={btn} aria-label={`Next day, ${dayLabel(addDays(day, 1))}`}>
+            {shortDayLabel(addDays(day, 1))}
+            <ChevronRightIcon data-icon="inline-end" />
+          </Link>
+        </div>
+        <ViewToggle active="month" month={month} />
+      </div>
+      <h2 className="text-lg font-semibold">
+        {dayLabel(day)}
+        <span className="ml-2 text-sm font-normal text-muted-foreground">
+          {items.length} {items.length === 1 ? "post" : "posts"} · times shown in {timezone}
+        </span>
+      </h2>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-soft">
+        {items.length === 0 ? (
+          <EmptyState
+            icon={CalendarClockIcon}
+            title={`Nothing scheduled for ${dayLabel(day)}`}
+            description="Approve memes and schedule them from the Approved tab to fill this day."
+          >
+            <Link href={monthHref(month)} className={buttonVariants({ variant: "outline" })}>
+              Back to {monthTitle(month)}
+            </Link>
+          </EmptyState>
+        ) : (
+          <ScheduleTable groups={groupScheduleItems(items, timezone, new Date())} timezone={timezone} username={username} />
+        )}
+      </div>
+    </>
+  );
+}
+
+async function ScheduleContent({ searchParams }: { searchParams: SearchParams }) {
+  await requireAdmin();
+  const params = await searchParams;
+
+  let shared: Shared;
+  try {
+    const [settings, account] = await Promise.all([getSettings(), getIgAccount()]);
+    shared = { timezone: settings.timezone, username: account?.username ?? null, slotsPerDay: settings.postSlots.length };
+  } catch (e) {
+    log.error({ err: e }, "Schedule settings load failed");
+    return <LoadError href="/schedule" />;
+  }
+
+  const day = parseDayKey(first(params.day));
+  if (day) return <DayView day={day} shared={shared} />;
+  if (first(params.view) === "month") return <MonthView params={params} shared={shared} />;
+  return <ListView params={params} shared={shared} />;
+}
+
 export default function SchedulePage({ searchParams }: PageProps<"/schedule">) {
   return (
     <>
       <PageHeader
         title="Schedule"
-        description="Every post that’s queued, publishing, or recently sent. Failed posts wait here for you to retry."
+        description="Every post that’s queued, publishing, or sent. Switch to the month view to spot gaps, and failed posts wait here for you to retry."
       />
       <Suspense fallback={<RowsSkeleton label="Loading schedule" />}>
-        <ScheduleList searchParams={searchParams} />
+        <ScheduleContent searchParams={searchParams} />
       </Suspense>
     </>
   );

@@ -120,6 +120,8 @@ Create a media container (image URL + caption) â†’ poll its status until ready â
 
 ## UI conventions
 
+Schedule has three views from the URL: list (default), `?view=month&month=YYYY-MM` and `?day=YYYY-MM-DD`. Calendar maths is pure and tested in `lib/schedule/calendar.ts`: days are `YYYY-MM-DD` keys in the schedule's timezone (never the browser's), key arithmetic is done in UTC, and only `gridRange`/`dayRange` turn keys into real instants (DST days are 23/25 hours). We deliberately built the grid by hand instead of using a calendar library: those use the browser's timezone, which would put posts near midnight on the wrong day.
+
 Review board (`components/post-board.tsx`): the server-side `PostGrid` prepares plain data, the client `PostBoard` owns the keyboard cursor, multi-select, bulk bar and the zoom view (`post-lightbox.tsx`). All reviews go through `useReview` (`lib/use-review.ts`) and the `reviewPosts` server action, always with an Undo toast; posted memes are never changed. Shortcuts are registered in the **capture phase** because dialogs stop arrow keys from bubbling. Cursor/range/selection maths is pure and tested (`lib/review-selection.ts`).
 
 Patterns per page (from the `page-patterns` skill): Memes and Schedule are List/Index, Activity is a feed, Settings is Settings (sticky section nav, instant-save switches, one Save per form group), Login is Form (auth).

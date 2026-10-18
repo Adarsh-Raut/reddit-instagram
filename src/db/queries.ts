@@ -84,6 +84,17 @@ export type ScheduleItem = {
   post: ScrapedPost;
 };
 
+type ScheduleRowJoin = { s: typeof scheduledPosts.$inferSelect; post: ScrapedPost };
+
+const toScheduleItem = (r: ScheduleRowJoin): ScheduleItem => ({
+  id: r.s.id,
+  scheduledAt: r.s.scheduledAt,
+  status: r.s.status,
+  error: r.s.error,
+  caption: r.s.caption,
+  post: r.post,
+});
+
 /** Everything scheduled in the last 24h or later, soonest first. */
 export async function listSchedule(): Promise<ScheduleItem[]> {
   const from = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -94,14 +105,28 @@ export async function listSchedule(): Promise<ScheduleItem[]> {
     .where(gte(scheduledPosts.scheduledAt, from))
     .orderBy(asc(scheduledPosts.scheduledAt))
     .limit(300);
-  return rows.map((r) => ({
-    id: r.s.id,
-    scheduledAt: r.s.scheduledAt,
-    status: r.s.status,
-    error: r.s.error,
-    caption: r.s.caption,
-    post: r.post,
-  }));
+  return rows.map(toScheduleItem);
+}
+
+/** Posts scheduled in [from, to), soonest first (the calendar's month and day views, any date range). */
+export async function listScheduleBetween(from: Date, to: Date): Promise<ScheduleItem[]> {
+  const rows = await getDb()
+    .select({ s: scheduledPosts, post: scrapedPosts })
+    .from(scheduledPosts)
+    .innerJoin(scrapedPosts, eq(scrapedPosts.id, scheduledPosts.scrapedPostId))
+    .where(and(gte(scheduledPosts.scheduledAt, from), lt(scheduledPosts.scheduledAt, to)))
+    .orderBy(asc(scheduledPosts.scheduledAt))
+    .limit(700); // a 6-week grid with a dozen posts a day is still well under this
+  return rows.map(toScheduleItem);
+}
+
+/** When the last pending post goes out (how far ahead the schedule is planned), or null. */
+export async function lastPendingAt(): Promise<Date | null> {
+  const [row] = await getDb()
+    .select({ last: sql<string | Date | null>`max(${scheduledPosts.scheduledAt})` })
+    .from(scheduledPosts)
+    .where(eq(scheduledPosts.status, "pending"));
+  return row?.last ? new Date(row.last) : null;
 }
 
 /** Only pending schedules can be removed; anything publishing/posted is left alone. */

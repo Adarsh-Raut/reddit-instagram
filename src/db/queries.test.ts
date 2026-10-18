@@ -19,7 +19,9 @@ import {
   insertScrapedPost,
   listApprovedUnscheduledIds,
   listPosts,
+  lastPendingAt,
   listSchedule,
+  listScheduleBetween,
   occupiedTimes,
   saveSettings,
   setPostStatus,
@@ -77,6 +79,40 @@ describe("settings", () => {
     expect((await getSettings()).postSlots).toEqual(["09:00", "14:00", "20:00"]);
     await saveSettings({ subreddits: ["a"], scrapeCount: 5, postSlots: ["10:00"], timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3 });
     expect(await getSettings()).toMatchObject({ subreddits: ["a"], scrapeCount: 5, timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3 });
+  });
+});
+
+describe("schedule ranges", () => {
+  async function scheduled(n: number, iso: string) {
+    await insertScrapedPost(post(n));
+    await insertSchedule([{ scrapedPostId: await idOf(`r${n}`), scheduledAt: new Date(iso) }]);
+  }
+
+  it("returns posts in [from, to), earliest first, including past ones that listSchedule hides", async () => {
+    await scheduled(1, "2020-01-05T10:00:00Z"); // long ago
+    await scheduled(2, "2020-01-03T10:00:00Z");
+    await scheduled(3, "2020-01-31T23:59:59Z");
+    await scheduled(4, "2020-02-01T00:00:00Z"); // exactly at the end: excluded
+    const items = await listScheduleBetween(new Date("2020-01-01T00:00:00Z"), new Date("2020-02-01T00:00:00Z"));
+    expect(items.map((i) => i.post.redditId)).toEqual(["r2", "r1", "r3"]);
+    expect(await listSchedule()).toHaveLength(0); // the old list only looks 24h back
+  });
+
+  it("includes the start boundary and returns nothing for an empty range", async () => {
+    await scheduled(1, "2020-03-01T00:00:00Z");
+    expect(await listScheduleBetween(new Date("2020-03-01T00:00:00Z"), new Date("2020-03-02T00:00:00Z"))).toHaveLength(1);
+    expect(await listScheduleBetween(new Date("2021-01-01T00:00:00Z"), new Date("2021-02-01T00:00:00Z"))).toEqual([]);
+  });
+
+  it("reports the last pending time, ignoring posted and failed rows, and null when none", async () => {
+    expect(await lastPendingAt()).toBeNull();
+    await scheduled(1, "2030-01-01T10:00:00Z");
+    await scheduled(2, "2030-03-01T10:00:00Z");
+    await scheduled(3, "2030-09-01T10:00:00Z");
+    const rows = await db.select().from(schema.scheduledPosts);
+    const latest = rows.find((r) => r.scheduledAt.toISOString().startsWith("2030-09"))!;
+    await db.update(schema.scheduledPosts).set({ status: "failed" }).where(eq(schema.scheduledPosts.id, latest.id));
+    expect((await lastPendingAt())?.toISOString()).toBe("2030-03-01T10:00:00.000Z");
   });
 });
 
