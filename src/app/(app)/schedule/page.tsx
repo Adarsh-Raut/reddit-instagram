@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getSettings, listSchedule } from "@/db/queries";
 import { buildCaption } from "@/lib/instagram/api";
+import { sourceLabel } from "@/lib/memes/manual";
 import { toLocalInputValue } from "@/lib/schedule/local-time";
 import { dayKey, formatInTimezone } from "@/lib/schedule/slots";
 
@@ -71,7 +72,7 @@ async function ScheduleList() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{it.post.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {formatInTimezone(it.scheduledAt, timezone)} · r/{it.post.subreddit}
+                    {formatInTimezone(it.scheduledAt, timezone)} · {sourceLabel(it.post)}
                   </p>
                   {it.error && <p className="truncate text-xs text-destructive">{it.error}</p>}
                 </div>

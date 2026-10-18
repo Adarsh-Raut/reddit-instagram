@@ -110,4 +110,8 @@ describe("buildCaption", () => {
   it("falls back to the subreddit when the author is unknown", () => {
     expect(buildCaption({ title: "Lol", author: null, subreddit: "memes" })).toContain("r/memes");
   });
+
+  it("uses just the title for memes the admin uploaded", () => {
+    expect(buildCaption({ title: "My own meme", author: null, subreddit: "manual" })).toBe("My own meme");
+  });
 });

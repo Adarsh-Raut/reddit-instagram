@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import type { PostStatus, PostWithSchedule } from "@/db/queries";
+import { isManual, sourceLabel } from "@/lib/memes/manual";
 import { formatInTimezone } from "@/lib/schedule/slots";
 
 const EMPTY: Record<PostStatus, string> = {
@@ -65,11 +66,13 @@ export function PostGrid({
             <CardContent className="space-y-2">
               <p className="line-clamp-2 text-sm font-medium">{p.title}</p>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="secondary">r/{p.subreddit}</Badge>
+                <Badge variant="secondary">{sourceLabel(p)}</Badge>
                 {p.author && <span>u/{p.author}</span>}
-                <a href={p.permalink} target="_blank" rel="noreferrer" className="underline">
-                  source
-                </a>
+                {!isManual(p) && (
+                  <a href={p.permalink} target="_blank" rel="noreferrer" className="underline">
+                    source
+                  </a>
+                )}
               </div>
               {p.status === "approved" && (
                 <p className="text-xs">

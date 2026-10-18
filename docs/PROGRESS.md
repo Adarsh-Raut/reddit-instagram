@@ -4,7 +4,7 @@ Last updated: 2026-10-16. Read this first when you come back to the project.
 
 ## Where things stand
 
-**All planned coding is done and covered by automated tests (174 tests, lint, typecheck and production build pass).**
+**All planned coding is done and covered by automated tests (192 tests, lint, typecheck and production build pass).**
 What has *not* happened yet is a run against the real services. Everything external (Reddit, Cloudinary,
 Instagram) has only been exercised with mocks, and the database with a local Docker Postgres.
 
@@ -14,6 +14,7 @@ Nothing has been pushed to GitHub. There is no remote yet. Everything is committ
 
 | Area | What it does |
 |---|---|
+| Add your own meme | Dashboard form: upload a JPEG/PNG/WebP (max 10 MB) + title. Goes straight to Approved (auto-scheduled if that setting is on). Caption is just the title. Lets you test everything without Reddit |
 | Scraper | Pulls image memes from chosen subreddits (Reddit OAuth), filters out NSFW/video/gallery/GIF/stickied, skips duplicates (Reddit id + SHA-256 of the image bytes), uploads to Cloudinary |
 | Dashboard `/` | Tabs New / Approved / Rejected / Posted with counts, 24 per page, Approve / Reject / Move back, "Scrape now" |
 | Scheduling | Next free daily slots (default 09:00, 14:00, 20:00), timezone and DST aware, never double-booked. "Schedule N approved" button, or automatic on approval (setting) |
@@ -46,7 +47,7 @@ Status of `.env.local` as of the last check (names only):
 | `APP_URL` | optional (defaults to `http://localhost:3000`) | |
 | `ADMIN_PASSWORD_HASH`, `SESSION_SECRET` | **missing** | run `npm run admin:setup` (prompts for a password, writes both) |
 | `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET` | **missing** | free Cloudinary account → dashboard |
-| `REDDIT_CLIENT_ID/CLIENT_SECRET/USER_AGENT` | **missing** | https://www.reddit.com/prefs/apps → "script" app (Reddit now vets new API access, which can take a while) |
+| `REDDIT_CLIENT_ID/CLIENT_SECRET/USER_AGENT` | **missing, Reddit access not granted** | https://www.reddit.com/prefs/apps → "script" app. Not needed for testing: use Add your own meme |
 
 **Until `npm run admin:setup` is run, the app is locked: every page redirects to /login and login is refused.** That's intentional (fail closed).
 
@@ -55,6 +56,25 @@ Meta app checklist (still to finish in the Meta dashboard):
 2. Add the permission **`instagram_business_content_publish`** (it was missing from the list).
 3. Instagram account is Business/Creator, public, and added as an **Instagram Tester** (App roles → Roles); accept the invite in the Instagram app.
 4. In "Set up Instagram business login", add the redirect URI `http://localhost:3000/api/instagram/callback`. If Meta rejects http://localhost, use an HTTPS tunnel and set `APP_URL` to it.
+
+## Meta needs HTTPS: use a tunnel (confirmed)
+Meta rejected `http://localhost:3000/api/instagram/callback` ("Error saving redirect URIs"). Use an HTTPS tunnel; `ngrok` (already logged in on this Mac) and `cloudflared` are installed.
+
+1. ngrok dashboard → Domains → copy your free static domain, e.g. `something.ngrok-free.app`
+2. `ngrok http --url=something.ngrok-free.app 3000` (leave running)
+3. In `.env.local` set `APP_URL=https://something.ngrok-free.app`
+4. Meta → Business login settings → redirect URI `https://something.ngrok-free.app/api/instagram/callback`
+5. Start the app (`npm run dev`) and **open the app through the https URL for the whole session** (cookies are per-host; logging in on localhost and connecting through the tunnel will fail the state check). `next.config.ts` allows the tunnel host automatically from `APP_URL`; restart the dev server after changing it.
+6. ngrok's free plan shows a one-time "Visit site" warning page in the browser; click through.
+No-signup alternative: `cloudflared tunnel --url http://localhost:3000` (the URL changes every run, so Meta + `APP_URL` need updating each time).
+Vercel works too (stable HTTPS URL) but needs Neon, all env vars, Inngest Cloud keys and a redeploy per fix; better once the flow is proven.
+
+## Testing without Reddit (no Reddit API access needed)
+Reddit API access wasn't granted. Everything except scraping can be tested with uploads:
+1. Needs only: `npm run admin:setup`, the three Cloudinary values, the tunnel above, and the Meta setup
+2. Dashboard → **Add your own meme** → pick an image + title → it appears in Approved
+3. Approved tab → Schedule (or Settings → auto-schedule). To test automatic posting soon: Schedule page → **Edit caption or time** → set a time ~5 minutes ahead → Save
+4. Immediate test: **Publish now**. Automatic test: run Inngest dev (step 8 below) and wait for the time to pass (the job runs every 5 minutes, on the :00/:05/:10 marks)
 
 ## First real test: checklist
 

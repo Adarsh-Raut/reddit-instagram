@@ -59,6 +59,7 @@ Create a media container (image URL + caption) → poll its status until ready �
 ## Instagram notes
 
 - Needs a Meta developer app with the Instagram product; set `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `APP_URL` and add `APP_URL/api/instagram/callback` as an OAuth redirect URI. Meta may require HTTPS there; if localhost is rejected, use a tunnel and set `APP_URL` to it.
+- Meta rejects `http://localhost` redirect URIs: test through an HTTPS tunnel (see `docs/PROGRESS.md`) with `APP_URL` set to it.
 - Never publish to the real account from tests or scripts; tests mock `fetch`. Only the user's click on "Publish now" posts for real.
 - Long-lived tokens last ~60 days; a daily Inngest job refreshes them when under 15 days remain. An expired token can't be refreshed, so the user must reconnect.
 
@@ -103,6 +104,7 @@ Create a media container (image URL + caption) → poll its status until ready �
 
 - `src/db` — Drizzle schema and lazy Neon client; migrations in `drizzle/`
 - `src/lib` — env validation, Cloudinary helpers, `log.ts` (Pino) and `activity.ts`
+- `src/lib/memes/manual.ts` — admin-uploaded memes (`subreddit = "manual"`, caption = title only)
 - `src/lib/reddit` — Reddit OAuth client, image filtering, scrape service (`scrape.ts` is pure, dependency-injected and unit-tested; `run.ts` wires real services)
 - `src/app/actions` — server actions (scrape, approve/reject, schedule, settings, publish, login/logout), all behind `requireAdmin()`
 - `src/lib/schedule` — `service.ts` (schedule approved posts, auto-schedule), `local-time.ts`, `assignSlots` (pure, timezone/DST-aware slot assignment), formatting helpers

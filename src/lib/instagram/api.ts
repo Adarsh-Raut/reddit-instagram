@@ -169,6 +169,8 @@ export async function publishImage(
 
 /** Caption with credit to the original poster. AI captions will replace this later. */
 export function buildCaption(post: { title: string; author: string | null; subreddit: string }) {
+  // memes the admin uploaded themselves have no one to credit
+  if (post.subreddit === "manual") return post.title;
   const credit = post.author
     ? `Credit: u/${post.author} on Reddit (r/${post.subreddit})`
     : `Source: r/${post.subreddit} on Reddit`;

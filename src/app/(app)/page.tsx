@@ -6,6 +6,7 @@ import { PostGrid } from "@/components/post-grid";
 import { ScrapeButton } from "@/components/scrape-button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScheduleForm } from "@/components/schedule-form";
+import { AddMemeForm } from "@/components/add-meme-form";
 import { Pagination } from "@/components/pagination";
 import { countByStatus, getSettings, listPosts, PAGE_SIZE, type PostStatus } from "@/db/queries";
 
@@ -98,6 +99,7 @@ export default function Home({ searchParams }: PageProps<"/">) {
         <h1 className="text-2xl font-semibold">Memes</h1>
         <ScrapeButton />
       </header>
+      <AddMemeForm />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
         <Dashboard searchParams={searchParams} />
       </Suspense>
