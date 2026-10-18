@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession, verifySession } from "./token";
 
 export function authConfigured() {
@@ -24,6 +25,7 @@ export async function endSession() {
 }
 
 export async function isAdmin() {
+  await connection(); // the check below reads the clock, so it must run at request time
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   return verifySession(token, process.env.SESSION_SECRET);
 }
