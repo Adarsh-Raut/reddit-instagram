@@ -1,6 +1,6 @@
 # Reddit → Instagram Meme Automation
 
-> Project status, setup checklist and test plan live in `docs/PROGRESS.md`. Read it first and keep it updated when something significant changes.
+> `README.md` is the setup guide for new developers (keep it in sync when setup steps, env vars or scripts change). Project status, setup checklist and test plan live in `docs/PROGRESS.md`; deployment steps in `docs/DEPLOY.md`. Read it first and keep it updated when something significant changes.
 
 A dashboard tool that scrapes memes from Reddit, lets an admin approve them, and automatically posts them to Instagram on a schedule.
 
