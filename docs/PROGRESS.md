@@ -4,6 +4,8 @@ Last updated: 2026-10-18. Read this first when you come back to the project.
 
 ## Where things stand
 
+**Update 2026-10-19 (later still): pad only when needed.** Images are no longer forced onto a 4:5 canvas. Images already between 4:5 and 1.91:1 are only converted to JPEG and capped at 1080px wide; taller ones are padded to 4:5 and wider ones to 1.91:1. Verified against real Cloudinary output for tall, square, 4:5, 3:2, 16:9, 2:1 and 3:1 shapes (all returned valid ratios). Because the output changes, **check one post on a throwaway Instagram account** before relying on it. 226 tests, lint, typecheck and build pass.
+
 **Update 2026-10-19 (later): Instagram preview.** The Schedule edit panel has Edit / Preview tabs (live caption), and Approved cards have a Preview button. It renders the exact image URL and caption publishing sends, with size/aspect, character and hashtag counts and errors for >2,200 characters, >30 hashtags, an unloadable image or a bad aspect ratio. Publishing now uses the same `pickCaption`/`buildCaption` as the preview. Checked in the browser against Cloudinary's public demo cloud (desktop, mobile, broken image, 31 hashtags). 221 tests, lint, typecheck and build pass. Not changed: a caption Instagram would reject is flagged but still not blocked from saving or publishing.
 
 **Update 2026-10-19: error pages.** Added `error.tsx`, `global-error.tsx` and `not-found.tsx` (see CLAUDE.md, UI conventions). Verified in the browser with a deliberately failing page and a deliberately failing root layout (both removed again): the reference shown to the user matches the digest in the server log. 207 tests, lint, typecheck and build pass.
@@ -110,7 +112,7 @@ Use a **throwaway Instagram account**; the post is public.
 10. Try the failure paths: disconnect Instagram and Publish now (expect a clear failure + Retry), edit a caption, move a time, unschedule
 
 Things most likely to need a small fix on first contact with the real services:
-- Instagram's image requirements (we send a padded 4:5, 1080px-wide JPEG from Cloudinary)
+- Instagram's image requirements (we send a JPEG at most 1080px wide; only images outside 4:5 to 1.91:1 are padded, see `INSTAGRAM_TRANSFORMATION`)
 - Whether Meta accepts the `http://localhost` redirect URI
 - Reddit returning 403/429 to the app (user agent / approval)
 - The `INSTAGRAM_API_VERSION` env var is empty (uses the app default); set it if Meta complains

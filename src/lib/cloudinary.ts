@@ -24,18 +24,36 @@ export async function uploadRemoteImage(sourceUrl: string, publicId: string) {
 }
 
 /**
- * Instagram needs a public JPEG with aspect ratio between 4:5 and 1.91:1.
- * Cloudinary converts to JPEG and pads to fit on the fly.
+ * Instagram needs a public JPEG with an aspect ratio between 4:5 and 1.91:1. Images already in
+ * that range are only converted and capped at 1080px wide; only images outside it are padded
+ * (taller than 4:5 -> 4:5, wider than 1.91:1 -> 1.91:1) so memes keep their full size.
+ *
+ * Each condition MUST be its own array entry: Cloudinary needs `if_ar_gt_1.91/` as a separate URL
+ * segment and answers 400 "Cannot find matching if" when it is joined to the transformation.
  */
-export function instagramReadyUrl(publicId: string) {
-  return configure().url(publicId, {
+export const INSTAGRAM_TRANSFORMATION = [
+  { if: "ar > 1.91" },
+  { aspect_ratio: "1.91", crop: "pad", background: "auto" },
+  { if: "end" },
+  { if: "ar < 0.8" },
+  { aspect_ratio: "4:5", crop: "pad", background: "auto" },
+  { if: "end" },
+  { width: 1080, crop: "limit" },
+];
+
+/** The Instagram-ready URL for an image. `cloudName` overrides the configured one (used by tests). */
+export function instagramImageUrl(publicId: string, cloudName?: string) {
+  return cloudinary.url(publicId, {
+    ...(cloudName ? { cloud_name: cloudName } : {}),
     secure: true,
     format: "jpg",
-    transformation: [
-      { aspect_ratio: "4:5", crop: "pad", background: "auto" },
-      { width: 1080, crop: "limit" },
-    ],
+    transformation: INSTAGRAM_TRANSFORMATION,
   });
+}
+
+export function instagramReadyUrl(publicId: string) {
+  configure();
+  return instagramImageUrl(publicId);
 }
 
 /** Remove an image from Cloudinary. Throws if Cloudinary reports anything but ok/not found. */

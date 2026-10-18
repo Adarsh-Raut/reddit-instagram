@@ -54,7 +54,7 @@ Out of scope for now: AI captions and hashtags (planned later), video/Reels.
 
 ## Instagram publishing flow
 
-Create a media container (image URL + caption) → poll its status until ready → call `media_publish`. Images must be JPEG with aspect ratio between 4:5 and 1.91:1; use Cloudinary transforms to convert and pad.
+Create a media container (image URL + caption) → poll its status until ready → call `media_publish`. Images must be JPEG with aspect ratio between 4:5 and 1.91:1; use Cloudinary transforms to convert to JPEG, cap the width at 1080 and pad **only images outside that range** (`INSTAGRAM_TRANSFORMATION` in `src/lib/cloudinary.ts`). Each `if_ar_…` condition must be its own URL segment, or Cloudinary answers 400 "Cannot find matching if" (tested in `cloudinary.test.ts`).
 
 ## Instagram notes
 
