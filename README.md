@@ -37,7 +37,7 @@ It is built for **one admin and one Instagram account**.
 
 - **Scrapes** image memes from subreddits you choose (static JPEG/PNG/WebP only; NSFW, video, gallery, GIF and pinned posts are skipped; duplicates are detected by Reddit id and by image content).
 - **Lets you upload your own** memes (JPEG/PNG/WebP, up to 4 MB). Uploaded memes skip review and go straight to *Approved*.
-- **Review dashboard** with New / Approved / Rejected / Posted tabs, search, paging, and Approve / Reject buttons (each action has an Undo toast).
+- **Review dashboard** with New / Approved / Rejected / Posted tabs, search, paging, and Approve / Reject buttons (each action has an Undo toast). Review from the keyboard: **J/K** or the arrow keys move, **A** approves, **R** rejects, **B** moves back to New, **X** selects, **V** opens a large view (with ←/→ to browse); select several (click the checkbox, Shift+click for a range) and approve or reject them in one go.
 - **Scheduling** into daily time slots (default 09:00, 14:00, 20:00 in your timezone), either by clicking *Schedule*, or automatically when you approve a meme.
 - **Publishes to Instagram** through the official Instagram API, at the scheduled time (checked every 5 minutes), or immediately with *Publish now*.
 - **Edit before posting:** change a caption or the scheduled time, or unschedule.

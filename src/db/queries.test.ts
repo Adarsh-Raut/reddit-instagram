@@ -23,6 +23,8 @@ import {
   occupiedTimes,
   saveSettings,
   setPostStatus,
+  setPostsStatus,
+  unschedulePendingForPosts,
   unschedule,
   unschedulePendingForPost,
   updateScheduleCaption,
@@ -75,6 +77,38 @@ describe("settings", () => {
     expect((await getSettings()).postSlots).toEqual(["09:00", "14:00", "20:00"]);
     await saveSettings({ subreddits: ["a"], scrapeCount: 5, postSlots: ["10:00"], timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3 });
     expect(await getSettings()).toMatchObject({ subreddits: ["a"], scrapeCount: 5, timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3 });
+  });
+});
+
+describe("bulk review", () => {
+  it("changes several posts at once and never touches posted ones", async () => {
+    for (const n of [1, 2, 3, 4]) await insertScrapedPost(post(n));
+    await setPostStatus(await idOf("r4"), "posted");
+    const ids = [await idOf("r1"), await idOf("r2"), await idOf("r4")];
+    const changed = await setPostsStatus(ids, "approved");
+    expect(changed.sort()).toEqual([await idOf("r1"), await idOf("r2")].sort());
+    const all = await db.select().from(schema.scrapedPosts);
+    expect(Object.fromEntries(all.map((p) => [p.redditId, p.status]))).toEqual({ r1: "approved", r2: "approved", r3: "new", r4: "posted" });
+  });
+
+  it("does nothing for an empty list", async () => {
+    expect(await setPostsStatus([], "rejected")).toEqual([]);
+    await unschedulePendingForPosts([]); // must not throw
+  });
+
+  it("unschedules only pending rows for the given posts", async () => {
+    for (const n of [1, 2, 3]) await insertScrapedPost(post(n));
+    await insertSchedule([
+      { scrapedPostId: await idOf("r1"), scheduledAt: new Date("2030-01-01T10:00:00Z") },
+      { scrapedPostId: await idOf("r2"), scheduledAt: new Date("2030-01-01T11:00:00Z") },
+      { scrapedPostId: await idOf("r3"), scheduledAt: new Date("2030-01-01T12:00:00Z") },
+    ]);
+    const rows = await db.select().from(schema.scheduledPosts);
+    await db.update(schema.scheduledPosts).set({ status: "publishing" }).where(eq(schema.scheduledPosts.id, rows[2].id));
+    await unschedulePendingForPosts([await idOf("r1"), await idOf("r2"), await idOf("r3")]);
+    const left = await db.select().from(schema.scheduledPosts);
+    expect(left).toHaveLength(1); // the one already publishing stays
+    expect(left[0].status).toBe("publishing");
   });
 });
 

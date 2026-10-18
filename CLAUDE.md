@@ -120,6 +120,8 @@ Create a media container (image URL + caption) â†’ poll its status until ready â
 
 ## UI conventions
 
+Review board (`components/post-board.tsx`): the server-side `PostGrid` prepares plain data, the client `PostBoard` owns the keyboard cursor, multi-select, bulk bar and the zoom view (`post-lightbox.tsx`). All reviews go through `useReview` (`lib/use-review.ts`) and the `reviewPosts` server action, always with an Undo toast; posted memes are never changed. Shortcuts are registered in the **capture phase** because dialogs stop arrow keys from bubbling. Cursor/range/selection maths is pure and tested (`lib/review-selection.ts`).
+
 Patterns per page (from the `page-patterns` skill): Memes and Schedule are List/Index, Activity is a feed, Settings is Settings (sticky section nav, instant-save switches, one Save per form group), Login is Form (auth).
 
 - Design tokens live in `src/app/globals.css` (one indigo accent, L0 `--background` / L1 `--card`, 1px borders + `shadow-soft`). Light and dark via `next-themes`. Type is 16/14/12px with weights 400/500/600 only.

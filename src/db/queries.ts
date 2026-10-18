@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import { activityLog, igAccounts, scheduledPosts, scrapedPosts, settings } from "./schema";
 
@@ -144,6 +144,27 @@ export async function countByStatus(): Promise<Record<PostStatus, number>> {
 
 export async function setPostStatus(id: string, status: PostStatus) {
   await getDb().update(scrapedPosts).set({ status }).where(eq(scrapedPosts.id, id));
+}
+
+/**
+ * Review several memes at once. Posts already published are never touched. Returns the ids that
+ * actually changed (so callers can tell how many were skipped).
+ */
+export async function setPostsStatus(ids: string[], status: "new" | "approved" | "rejected"): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const rows = await getDb()
+    .update(scrapedPosts)
+    .set({ status })
+    .where(and(inArray(scrapedPosts.id, ids), ne(scrapedPosts.status, "posted")))
+    .returning({ id: scrapedPosts.id });
+  return rows.map((r) => r.id);
+}
+
+export async function unschedulePendingForPosts(postIds: string[]) {
+  if (postIds.length === 0) return;
+  await getDb()
+    .delete(scheduledPosts)
+    .where(and(inArray(scheduledPosts.scrapedPostId, postIds), eq(scheduledPosts.status, "pending")));
 }
 
 export async function existingRedditIds(ids: string[]): Promise<Set<string>> {

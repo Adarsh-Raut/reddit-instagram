@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { setPostStatus, unschedulePendingForPost } from "@/db/queries";
+import { setPostStatus, setPostsStatus, unschedulePendingForPost, unschedulePendingForPosts } from "@/db/queries";
 import { requireAdmin } from "@/lib/auth/session";
 import { getLogger } from "@/lib/log";
 import { autoScheduleIfEnabled } from "@/lib/schedule/service";
@@ -49,4 +49,30 @@ export async function reviewPost(formData: FormData) {
     }
   }
   revalidatePath("/", "layout");
+}
+
+const bulkSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100),
+  status: z.enum(["new", "approved", "rejected"]),
+});
+
+export type BulkReviewResult = { ok: boolean; changed: number; message?: string };
+
+/** Review several memes at once (the board's multi-select and Undo). Posted memes are skipped. */
+export async function reviewPosts(ids: string[], status: "new" | "approved" | "rejected"): Promise<BulkReviewResult> {
+  await requireAdmin();
+  const parsed = bulkSchema.safeParse({ ids, status });
+  if (!parsed.success) return { ok: false, changed: 0, message: "Choose between 1 and 100 memes." };
+  const changed = await setPostsStatus(parsed.data.ids, parsed.data.status);
+  // un-approving also frees the time slots
+  if (parsed.data.status !== "approved") await unschedulePendingForPosts(changed);
+  else {
+    try {
+      await autoScheduleIfEnabled();
+    } catch (e) {
+      log.error({ err: e }, "auto-schedule failed"); // they stay approved; the user can schedule manually
+    }
+  }
+  revalidatePath("/", "layout");
+  return { ok: true, changed: changed.length };
 }
