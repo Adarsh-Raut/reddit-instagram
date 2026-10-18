@@ -13,7 +13,8 @@ export async function getSettings(): Promise<AppSettings> {
   return row;
 }
 
-export type PostWithSchedule = ScrapedPost & { scheduledAt: Date | null };
+/** `scheduleCaption` is the caption edited on the schedule row ("" = use the default), null when unscheduled. */
+export type PostWithSchedule = ScrapedPost & { scheduledAt: Date | null; scheduleCaption: string | null };
 
 export const PAGE_SIZE = 24;
 
@@ -27,14 +28,14 @@ function searchFilter(q?: string) {
 
 export async function listPosts(status: PostStatus, page = 1, q?: string): Promise<PostWithSchedule[]> {
   const rows = await getDb()
-    .select({ post: scrapedPosts, scheduledAt: scheduledPosts.scheduledAt })
+    .select({ post: scrapedPosts, scheduledAt: scheduledPosts.scheduledAt, scheduleCaption: scheduledPosts.caption })
     .from(scrapedPosts)
     .leftJoin(scheduledPosts, eq(scheduledPosts.scrapedPostId, scrapedPosts.id))
     .where(and(eq(scrapedPosts.status, status), searchFilter(q)))
     .orderBy(desc(scrapedPosts.scrapedAt), asc(scrapedPosts.id))
     .limit(PAGE_SIZE)
     .offset((Math.max(1, page) - 1) * PAGE_SIZE);
-  return rows.map((r) => ({ ...r.post, scheduledAt: r.scheduledAt }));
+  return rows.map((r) => ({ ...r.post, scheduledAt: r.scheduledAt, scheduleCaption: r.scheduleCaption }));
 }
 
 /** How many posts match, for pagination while a search is active. */

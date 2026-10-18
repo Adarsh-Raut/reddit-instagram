@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import {
   countByStatus,
   countPosts,
+  getIgAccount,
   getSettings,
   listPosts,
   PAGE_SIZE,
@@ -86,15 +87,24 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
 
   let data;
   try {
-    const [counts, settings, matching] = await Promise.all([
+    const [counts, settings, matching, account] = await Promise.all([
       countByStatus(),
       getSettings(),
       q ? countPosts(status, q) : Promise.resolve(null),
+      // only the Approved tab shows previews, which need the Instagram handle
+      status === "approved" ? getIgAccount() : Promise.resolve(null),
     ]);
     const total = matching ?? counts[status];
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const page = Math.min(requestedPage, totalPages);
-    data = { posts: await listPosts(status, page, q), counts, timezone: settings.timezone, page, totalPages };
+    data = {
+      posts: await listPosts(status, page, q),
+      counts,
+      timezone: settings.timezone,
+      username: account?.username ?? null,
+      page,
+      totalPages,
+    };
   } catch (e) {
     log.error({ err: e }, "Dashboard data load failed");
     return (
@@ -144,7 +154,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/">["searc
           )}
         </div>
       ) : (
-        <PostGrid posts={data.posts} status={status} timezone={data.timezone} />
+        <PostGrid posts={data.posts} status={status} timezone={data.timezone} username={data.username} />
       )}
       <Pagination
         page={data.page}

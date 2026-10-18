@@ -11,7 +11,8 @@ import { recordActivity, type ActivityEvent } from "@/lib/activity";
 import { instagramReadyUrl } from "@/lib/cloudinary";
 import { decrypt } from "@/lib/crypto";
 import { getLogger } from "@/lib/log";
-import { buildCaption, publishImage } from "./api";
+import { publishImage } from "./api";
+import { buildCaption, pickCaption } from "./caption";
 import { getIgConfig } from "./config";
 
 const log = getLogger("publish");
@@ -74,7 +75,7 @@ export async function publishScheduledPost(
       igUserId: account.igUserId,
       token: deps.decryptToken(account.encryptedToken),
       imageUrl: deps.imageUrl(claim.post.cloudinaryPublicId),
-      caption: claim.caption || buildCaption(claim.post),
+      caption: pickCaption(claim.caption, buildCaption(claim.post)),
     });
     try {
       await deps.markPosted(scheduleId, claim.postId, mediaId);

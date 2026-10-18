@@ -1,7 +1,10 @@
 import { ClockIcon, ExternalLinkIcon, ImageOffIcon } from "lucide-react";
 import Image from "next/image";
+import { PostPreviewSheet } from "@/components/post-preview-sheet";
 import { ReviewActions } from "@/components/review-actions";
 import type { PostStatus, PostWithSchedule } from "@/db/queries";
+import { buildCaption, pickCaption } from "@/lib/instagram/caption";
+import { previewImageUrl } from "@/lib/instagram/preview-url";
 import { isManual, sourceLabel } from "@/lib/memes/manual";
 import { formatInTimezone } from "@/lib/schedule/slots";
 
@@ -9,10 +12,13 @@ import { formatInTimezone } from "@/lib/schedule/slots";
 export function PostGrid({
   posts,
   timezone,
+  username,
 }: {
   posts: PostWithSchedule[];
   status: PostStatus;
   timezone: string;
+  /** Instagram handle shown in the preview; null when not connected. */
+  username: string | null;
 }) {
   return (
     <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -56,17 +62,25 @@ export function PostGrid({
                 </p>
               </div>
               {p.status === "approved" && (
-                <p className="flex items-center gap-1.5 text-sm">
-                  <ClockIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                  {p.scheduledAt ? (
-                    <span>
-                      <span className="text-muted-foreground">Posts </span>
-                      {formatInTimezone(p.scheduledAt, timezone)}
-                    </span>
-                  ) : (
-                    <span className="text-warning">Not scheduled yet</span>
-                  )}
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-x-2">
+                  <p className="flex items-center gap-1.5 text-sm">
+                    <ClockIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    {p.scheduledAt ? (
+                      <span>
+                        <span className="text-muted-foreground">Posts </span>
+                        {formatInTimezone(p.scheduledAt, timezone)}
+                      </span>
+                    ) : (
+                      <span className="text-warning">Not scheduled yet</span>
+                    )}
+                  </p>
+                  <PostPreviewSheet
+                    title={p.title}
+                    imageUrl={previewImageUrl(p.cloudinaryPublicId)}
+                    caption={pickCaption(p.scheduleCaption ?? "", buildCaption(p))}
+                    username={username}
+                  />
+                </div>
               )}
               {p.status === "posted" && p.scheduledAt && (
                 <p className="text-sm text-muted-foreground">Posted {formatInTimezone(p.scheduledAt, timezone)}</p>

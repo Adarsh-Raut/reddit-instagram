@@ -8,9 +8,10 @@ import { TabNav } from "@/components/tab-nav";
 import { buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { getSettings, listSchedule, type ScheduleItem } from "@/db/queries";
+import { getIgAccount, getSettings, listSchedule, type ScheduleItem } from "@/db/queries";
 import { requireAdmin } from "@/lib/auth/session";
-import { buildCaption } from "@/lib/instagram/api";
+import { buildCaption } from "@/lib/instagram/caption";
+import { previewImageUrl } from "@/lib/instagram/preview-url";
 import { getLogger } from "@/lib/log";
 import { sourceLabel } from "@/lib/memes/manual";
 import { toLocalInputValue } from "@/lib/schedule/local-time";
@@ -53,10 +54,11 @@ async function ScheduleList({ searchParams }: { searchParams: PageProps<"/schedu
   const filter = FILTERS.find((f) => f.key === first(params.filter))?.key ?? "all";
   const q = first(params.q).trim().slice(0, 100);
 
-  let items: ScheduleItem[], timezone: string;
+  let items: ScheduleItem[], timezone: string, username: string | null;
   try {
-    const settings = await getSettings();
+    const [settings, account] = await Promise.all([getSettings(), getIgAccount()]);
     timezone = settings.timezone;
+    username = account?.username ?? null;
     items = await listSchedule();
   } catch (e) {
     log.error({ err: e }, "Schedule load failed");
@@ -101,6 +103,7 @@ async function ScheduleList({ searchParams }: { searchParams: PageProps<"/schedu
       error: it.error,
       caption: it.caption,
       defaultCaption: buildCaption(it.post),
+      previewUrl: previewImageUrl(it.post.cloudinaryPublicId),
     });
     days.set(k, group);
   }
@@ -164,7 +167,7 @@ async function ScheduleList({ searchParams }: { searchParams: PageProps<"/schedu
                     </th>
                   </tr>
                   {group.rows.map((row) => (
-                    <ScheduleRow key={row.id} row={row} timezone={timezone} />
+                    <ScheduleRow key={row.id} row={row} timezone={timezone} username={username} />
                   ))}
                 </tbody>
               ))}

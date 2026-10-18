@@ -4,6 +4,8 @@ Last updated: 2026-10-18. Read this first when you come back to the project.
 
 ## Where things stand
 
+**Update 2026-10-19 (later): Instagram preview.** The Schedule edit panel has Edit / Preview tabs (live caption), and Approved cards have a Preview button. It renders the exact image URL and caption publishing sends, with size/aspect, character and hashtag counts and errors for >2,200 characters, >30 hashtags, an unloadable image or a bad aspect ratio. Publishing now uses the same `pickCaption`/`buildCaption` as the preview. Checked in the browser against Cloudinary's public demo cloud (desktop, mobile, broken image, 31 hashtags). 221 tests, lint, typecheck and build pass. Not changed: a caption Instagram would reject is flagged but still not blocked from saving or publishing.
+
 **Update 2026-10-19: error pages.** Added `error.tsx`, `global-error.tsx` and `not-found.tsx` (see CLAUDE.md, UI conventions). Verified in the browser with a deliberately failing page and a deliberately failing root layout (both removed again): the reference shown to the user matches the digest in the server log. 207 tests, lint, typecheck and build pass.
 
 **Update 2026-10-18 (later): UI/UX redesign.** Sidebar app shell (menu on mobile), light/dark themes, new design tokens, toasts with Undo, slide-overs for edits, named confirm dialogs for publish/disconnect, skeleton/empty/error states, search on Memes and Schedule, instant-save automation switches. Checked in the browser at 375px and 1280px (light and dark) against a scratch Postgres database (`ui_check`) with demo rows and a test-only admin password, never the real dev data. Automated: 202 tests, lint, typecheck and build pass. Not covered by automated tests: the visual components themselves (verified by hand), and real Instagram publishing.
@@ -148,4 +150,4 @@ docker compose up -d db
 ```
 
 ## Ideas for later
-AI captions and hashtags, Reels/video, email or push alerts, multiple Instagram accounts, per-subreddit quality filters (min score), a preview of exactly what Instagram will receive, analytics on which memes perform.
+AI captions and hashtags, Reels/video, email or push alerts, multiple Instagram accounts, per-subreddit quality filters (min score), analytics on which memes perform.

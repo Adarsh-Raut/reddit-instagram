@@ -1,11 +1,13 @@
 "use client";
 
-import { EllipsisIcon, ImageOffIcon, LoaderCircleIcon, PencilIcon, SendIcon, Trash2Icon } from "lucide-react";
+import { Tabs } from "@base-ui/react/tabs";
+import { EllipsisIcon, EyeIcon, ImageOffIcon, LoaderCircleIcon, PencilIcon, SendIcon, Trash2Icon } from "lucide-react";
 import Image from "next/image";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { publishNow } from "@/app/actions/instagram";
 import { editScheduledPost, unschedulePost, type ActionState } from "@/app/actions/schedule";
+import { InstagramPreview } from "@/components/instagram-preview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -13,6 +15,7 @@ import { Field, Input, Textarea } from "@/components/ui/field";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { IconButton } from "@/components/ui/tooltip";
+import { pickCaption } from "@/lib/instagram/caption";
 import { useActionToast } from "@/lib/use-action-toast";
 import { useProgrammaticFocus } from "@/lib/use-programmatic-focus";
 import { cn } from "@/lib/utils";
@@ -28,7 +31,11 @@ export type ScheduleRowData = {
   error: string | null;
   caption: string;
   defaultCaption: string;
+  /** The exact image URL Instagram will fetch (null if it can't be built). */
+  previewUrl: string | null;
 };
+
+type SheetTab = "edit" | "preview";
 
 const STATUS: Record<ScheduleRowData["status"], { label: string; variant: "secondary" | "default" | "success" | "destructive" }> = {
   pending: { label: "Scheduled", variant: "secondary" },
@@ -40,11 +47,17 @@ const STATUS: Record<ScheduleRowData["status"], { label: string; variant: "secon
 function EditSheet({
   row,
   timezone,
+  username,
+  tab,
+  onTabChange,
   open,
   onOpenChange,
 }: {
   row: ScheduleRowData;
   timezone: string;
+  username: string | null;
+  tab: SheetTab;
+  onTabChange: (tab: SheetTab) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -74,7 +87,24 @@ function EditSheet({
           className="flex min-h-0 flex-1 flex-col"
         >
           <input type="hidden" name="id" value={row.id} />
-          <div className="flex-1 space-y-5 overflow-y-auto p-5">
+          <Tabs.Root value={tab} onValueChange={(v) => onTabChange(v as SheetTab)} className="flex min-h-0 flex-1 flex-col">
+            <Tabs.List aria-label="Edit or preview" className="flex gap-1 border-b px-5">
+              {(
+                [
+                  ["edit", "Edit"],
+                  ["preview", "Preview"],
+                ] as const
+              ).map(([value, label]) => (
+                <Tabs.Tab
+                  key={value}
+                  value={value}
+                  className="-mb-px flex min-h-10 cursor-pointer items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-out outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 data-[active]:border-primary data-[active]:text-foreground max-md:min-h-11"
+                >
+                  {label}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+            <Tabs.Panel value="edit" keepMounted className="flex-1 space-y-5 overflow-y-auto p-5">
             <Field
               label="Caption"
               optional
@@ -108,12 +138,16 @@ function EditSheet({
                 />
               )}
             </Field>
-            {state && !state.ok && (
-              <p role="alert" className="text-sm text-destructive">
-                {state.message}
-              </p>
-            )}
-          </div>
+            </Tabs.Panel>
+            <Tabs.Panel value="preview" className="flex-1 overflow-y-auto p-5">
+              <InstagramPreview imageUrl={row.previewUrl} caption={pickCaption(caption, row.defaultCaption)} username={username} />
+            </Tabs.Panel>
+          </Tabs.Root>
+          {state && !state.ok && (
+            <p role="alert" className="border-t px-5 py-3 text-sm text-destructive">
+              {state.message}
+            </p>
+          )}
           <div className="flex justify-end gap-2 border-t p-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -129,8 +163,13 @@ function EditSheet({
   );
 }
 
-export function ScheduleRow({ row, timezone }: { row: ScheduleRowData; timezone: string }) {
+export function ScheduleRow({ row, timezone, username }: { row: ScheduleRowData; timezone: string; username: string | null }) {
   const [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState<SheetTab>("edit");
+  const openSheet = (next: SheetTab) => {
+    setTab(next);
+    setEditing(true);
+  };
   const [publishing, startPublish] = useTransition();
   const [removing, startRemove] = useTransition();
   const editable = row.status === "pending" || row.status === "failed";
@@ -178,7 +217,7 @@ export function ScheduleRow({ row, timezone }: { row: ScheduleRowData; timezone:
             {editable ? (
               <button
                 type="button"
-                onClick={() => setEditing(true)}
+                onClick={() => openSheet("edit")}
                 className="block max-w-xs truncate text-left text-sm font-medium text-primary hover:underline max-md:max-w-[15rem] max-md:py-2"
               >
                 {row.title}
@@ -225,9 +264,13 @@ export function ScheduleRow({ row, timezone }: { row: ScheduleRowData; timezone:
                 <EllipsisIcon />
               </MenuTrigger>
               <MenuContent>
-                <MenuItem onClick={() => setEditing(true)}>
+                <MenuItem onClick={() => openSheet("edit")}>
                   <PencilIcon />
                   Edit caption or time
+                </MenuItem>
+                <MenuItem onClick={() => openSheet("preview")}>
+                  <EyeIcon />
+                  Preview on Instagram
                 </MenuItem>
                 {row.status === "pending" && (
                   <MenuItem destructive onClick={unschedule}>
@@ -239,7 +282,9 @@ export function ScheduleRow({ row, timezone }: { row: ScheduleRowData; timezone:
             </Menu>
           )}
         </div>
-        {editable && <EditSheet row={row} timezone={timezone} open={editing} onOpenChange={setEditing} />}
+        {editable && (
+          <EditSheet row={row} timezone={timezone} username={username} tab={tab} onTabChange={setTab} open={editing} onOpenChange={setEditing} />
+        )}
       </td>
     </tr>
   );

@@ -25,6 +25,7 @@ import {
   setPostStatus,
   unschedule,
   unschedulePendingForPost,
+  updateScheduleCaption,
 } from "./queries";
 import * as schema from "./schema";
 
@@ -141,9 +142,20 @@ describe("scheduling queries", () => {
     await insertSchedule([{ scrapedPostId: id, scheduledAt: at }]);
     const [p] = await listPosts("approved");
     expect(p.scheduledAt?.getTime()).toBe(at.getTime());
+    expect(p.scheduleCaption).toBe(""); // default caption until it is edited
+    const [row] = await db.select().from(schema.scheduledPosts);
+    await updateScheduleCaption(row.id, "Edited #caption");
+    expect((await listPosts("approved"))[0].scheduleCaption).toBe("Edited #caption");
     const items = await listSchedule();
     expect(items).toHaveLength(1);
     expect(items[0].post.redditId).toBe("r1");
+  });
+
+  it("reports no schedule caption for an unscheduled post", async () => {
+    await insertScrapedPost(post(1));
+    const [p] = await listPosts("new");
+    expect(p.scheduledAt).toBeNull();
+    expect(p.scheduleCaption).toBeNull();
   });
 
   it("unschedule removes pending rows but never publishing ones", async () => {
