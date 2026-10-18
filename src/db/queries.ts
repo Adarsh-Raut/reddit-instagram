@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { getDb } from "./index";
 import { activityLog, igAccounts, scheduledPosts, scrapedPosts, settings } from "./schema";
 
@@ -17,16 +17,33 @@ export type PostWithSchedule = ScrapedPost & { scheduledAt: Date | null };
 
 export const PAGE_SIZE = 24;
 
-export async function listPosts(status: PostStatus, page = 1): Promise<PostWithSchedule[]> {
+/** Title/author search term -> filter. `%`, `_` and `\\` are escaped so they match literally. */
+function searchFilter(q?: string) {
+  const term = q?.trim();
+  if (!term) return undefined;
+  const pattern = `%${term.replace(/[\\%_]/g, "\\$&")}%`;
+  return or(ilike(scrapedPosts.title, pattern), ilike(scrapedPosts.author, pattern));
+}
+
+export async function listPosts(status: PostStatus, page = 1, q?: string): Promise<PostWithSchedule[]> {
   const rows = await getDb()
     .select({ post: scrapedPosts, scheduledAt: scheduledPosts.scheduledAt })
     .from(scrapedPosts)
     .leftJoin(scheduledPosts, eq(scheduledPosts.scrapedPostId, scrapedPosts.id))
-    .where(eq(scrapedPosts.status, status))
+    .where(and(eq(scrapedPosts.status, status), searchFilter(q)))
     .orderBy(desc(scrapedPosts.scrapedAt), asc(scrapedPosts.id))
     .limit(PAGE_SIZE)
     .offset((Math.max(1, page) - 1) * PAGE_SIZE);
   return rows.map((r) => ({ ...r.post, scheduledAt: r.scheduledAt }));
+}
+
+/** How many posts match, for pagination while a search is active. */
+export async function countPosts(status: PostStatus, q?: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ n: sql<number>`count(*)::int` })
+    .from(scrapedPosts)
+    .where(and(eq(scrapedPosts.status, status), searchFilter(q)));
+  return row?.n ?? 0;
 }
 
 /** Approved posts that have no schedule row yet, oldest first. */

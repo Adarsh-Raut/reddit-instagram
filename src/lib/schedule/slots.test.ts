@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignSlots, dayKey, isValidSlot, isValidTimezone } from "./slots";
+import { assignSlots, dayKey, formatDayHeading, formatTime, isValidSlot, isValidTimezone } from "./slots";
 
 // Asia/Kolkata is UTC+5:30 with no DST: 09:00 IST = 03:30Z, 14:00 IST = 08:30Z.
 const base = {
@@ -90,5 +90,20 @@ describe("helpers", () => {
   it("computes the calendar day in the given timezone", () => {
     expect(dayKey(new Date("2026-10-19T23:00:00Z"), "Asia/Kolkata")).toBe("2026-10-20");
     expect(dayKey(new Date("2026-10-19T23:00:00Z"), "UTC")).toBe("2026-10-19");
+  });
+});
+
+describe("display formatting", () => {
+  it("formats clock time in the given timezone", () => {
+    expect(formatTime(new Date("2030-01-01T14:30:00Z"), "Asia/Kolkata")).toBe("8:00 PM");
+    expect(formatTime(new Date("2030-01-01T14:30:00Z"), "UTC")).toBe("2:30 PM");
+  });
+
+  it("labels days relative to now, using the timezone's calendar day", () => {
+    const now = new Date("2030-03-10T23:30:00Z"); // already Mar 11 in Kolkata
+    expect(formatDayHeading(new Date("2030-03-11T05:00:00Z"), "Asia/Kolkata", now)).toBe("Today");
+    expect(formatDayHeading(new Date("2030-03-11T05:00:00Z"), "UTC", now)).toBe("Tomorrow");
+    expect(formatDayHeading(new Date("2030-03-09T12:00:00Z"), "UTC", now)).toBe("Yesterday");
+    expect(formatDayHeading(new Date("2030-03-15T12:00:00Z"), "UTC", now)).toBe("Fri, Mar 15");
   });
 });

@@ -35,3 +35,22 @@ export const settingsInput = z.object({
 });
 
 export type SettingsInput = z.infer<typeof settingsInput>;
+
+/** The fields the Settings form edits. The automation switches save on their own. */
+export const settingsFormInput = settingsInput.pick({
+  subreddits: true,
+  scrapeCount: true,
+  postSlots: true,
+  timezone: true,
+});
+
+/** One automation switch (or the look-ahead days) changed. Anything omitted stays as it is. */
+export const automationPatch = z
+  .object({
+    autoScrape: z.boolean().optional(),
+    autoSchedule: z.boolean().optional(),
+    autoScheduleDays: z.number().int().min(1, "Use between 1 and 90 days.").max(90, "Use between 1 and 90 days.").optional(),
+  })
+  .strict();
+
+export type AutomationPatch = z.infer<typeof automationPatch>;

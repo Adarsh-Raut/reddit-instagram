@@ -83,3 +83,18 @@ export function dayKey(date: Date, timezone: string) {
     day: "2-digit",
   }).format(date);
 }
+
+/** Clock time of an instant in `timezone`, e.g. "9:00 AM". */
+export function formatTime(date: Date, timezone: string) {
+  return new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+/** "Today", "Tomorrow", "Yesterday", or "Mon, Jun 3" for the calendar day of `date` in `timezone`. */
+export function formatDayHeading(date: Date, timezone: string, now: Date = new Date()) {
+  const day = (d: Date) => Date.parse(`${dayKey(d, timezone)}T00:00:00Z`);
+  const diff = Math.round((day(date) - day(now)) / 86_400_000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  if (diff === -1) return "Yesterday";
+  return new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short", month: "short", day: "numeric" }).format(date);
+}

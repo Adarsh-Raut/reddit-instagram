@@ -15,6 +15,7 @@ import {
   markPosted,
   saveIgAccount,
   insertSchedule,
+  countPosts,
   insertScrapedPost,
   listApprovedUnscheduledIds,
   listPosts,
@@ -61,6 +62,29 @@ describe("settings", () => {
     expect((await getSettings()).postSlots).toEqual(["09:00", "14:00", "20:00"]);
     await saveSettings({ subreddits: ["a"], scrapeCount: 5, postSlots: ["10:00"], timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3 });
     expect(await getSettings()).toMatchObject({ subreddits: ["a"], scrapeCount: 5, timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3 });
+  });
+});
+
+describe("post search", () => {
+  it("matches title or author case-insensitively, within one status, and counts the same rows", async () => {
+    await insertScrapedPost({ ...post(1), title: "Monday Cat meme", author: "alice" });
+    await insertScrapedPost({ ...post(2), title: "Dog photo", author: "CatLover" });
+    await insertScrapedPost({ ...post(3), title: "Something else", author: "bob" });
+    await setPostStatus(await idOf("r3"), "approved");
+
+    const hits = await listPosts("new", 1, "cat");
+    expect(hits.map((p) => p.redditId).sort()).toEqual(["r1", "r2"]);
+    expect(await countPosts("new", "cat")).toBe(2);
+    expect(await countPosts("approved", "cat")).toBe(0);
+    expect(await countPosts("new")).toBe(2); // no search term: everything in the status
+    expect((await listPosts("new", 1, "   ")).length).toBe(2); // blank search is ignored
+  });
+
+  it("treats % and _ in the search term literally", async () => {
+    await insertScrapedPost({ ...post(1), title: "100% real" });
+    await insertScrapedPost({ ...post(2), title: "1000 fake" });
+    expect((await listPosts("new", 1, "100%")).map((p) => p.redditId)).toEqual(["r1"]);
+    expect(await countPosts("new", "_")).toBe(0);
   });
 });
 
