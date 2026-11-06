@@ -2,16 +2,22 @@ import { decrypt, encrypt } from "@/lib/crypto";
 import { refreshLongLived } from "@/lib/instagram/api";
 import { daysUntil } from "@/lib/instagram/token";
 import {
+  bumpCaptionAttempts,
   clearImage,
   failMissed,
   failStuck,
   getIgAccount,
   getSettings,
+  listCaptionJobs,
   listDueScheduleIds,
   listStaleRejected,
+  saveAiCaption,
   saveIgAccount,
+  type CaptionJob,
   type IgAccount,
 } from "@/db/queries";
+import type { GenerateResult } from "@/lib/ai/generate";
+import { generateCaptionFor, hasAiProviders } from "@/lib/ai/run";
 import { deleteImage } from "@/lib/cloudinary";
 import { runScrape } from "@/lib/reddit/run";
 import type { ScrapeResult } from "@/lib/reddit/scrape";
@@ -148,4 +154,62 @@ export async function runImageCleanup(deps: CleanupJobDeps = realCleanupDeps) {
     }
   }
   return { deleted, errors };
+}
+
+/** Captions written per run (runs are 5 minutes apart): well inside the free AI limits and the function time limit. */
+export const CAPTIONS_PER_RUN = 2;
+
+export type CaptionJobDeps = {
+  getSettings: () => Promise<{ aiCaptions: boolean }>;
+  hasProviders: () => boolean;
+  listJobs: (limit: number) => Promise<CaptionJob[]>;
+  generate: (post: CaptionJob["post"]) => Promise<GenerateResult>;
+  save: (scheduleId: string, caption: string, provider: string) => Promise<boolean>;
+  bumpAttempts: (scheduleId: string) => Promise<void>;
+};
+
+const realCaptionDeps: CaptionJobDeps = {
+  getSettings,
+  hasProviders: hasAiProviders,
+  listJobs: listCaptionJobs,
+  generate: generateCaptionFor,
+  save: saveAiCaption,
+  bumpAttempts: bumpCaptionAttempts,
+};
+
+export type CaptionRunResult = {
+  skipped: "off" | "no-keys" | null;
+  /** providers that wrote a caption, one entry per post */
+  generated: string[];
+  /** posts where no provider produced a caption */
+  failed: number;
+  /** why providers failed or were skipped (also when a later provider still succeeded) */
+  failures: string[];
+};
+
+/**
+ * Write AI captions for the soonest scheduled posts that have none. Never touches publishing:
+ * a post with no caption simply goes out with the default one. A caption the admin typed
+ * meanwhile is kept (`save` only writes into an empty caption).
+ */
+export async function runGenerateCaptions(deps: CaptionJobDeps = realCaptionDeps): Promise<CaptionRunResult> {
+  const empty = { generated: [], failed: 0, failures: [] };
+  if (!(await deps.getSettings()).aiCaptions) return { skipped: "off", ...empty };
+  if (!deps.hasProviders()) return { skipped: "no-keys", ...empty };
+  const jobs = await deps.listJobs(CAPTIONS_PER_RUN);
+  const result: CaptionRunResult = { skipped: null, ...empty };
+  await Promise.all(
+    jobs.map(async (job) => {
+      const r = await deps.generate(job.post);
+      result.failures.push(...r.failures);
+      if (r.ok) {
+        await deps.save(job.scheduleId, r.caption, r.provider);
+        result.generated.push(r.provider);
+      } else {
+        result.failed += 1;
+        await deps.bumpAttempts(job.scheduleId);
+      }
+    }),
+  );
+  return result;
 }

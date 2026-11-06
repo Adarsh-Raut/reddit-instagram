@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import type { AutomationPatch } from "@/lib/settings";
 
-type Props = { autoScrape: boolean; autoSchedule: boolean; autoScheduleDays: number };
+type Props = { autoScrape: boolean; autoSchedule: boolean; autoScheduleDays: number; aiCaptions: boolean };
 
 function SwitchRow({
   label,
@@ -78,6 +78,13 @@ export function AutomationSettings(initial: Props) {
         checked={values.autoSchedule}
         disabled={pending}
         onChange={(next) => save({ autoSchedule: next })}
+      />
+      <SwitchRow
+        label="Write captions with AI"
+        description="A short, funny caption with hashtags is written for each scheduled post, using Gemini first and Groq as the backup. Your credit line stays, and you can edit any caption. Posts without one use the default."
+        checked={values.aiCaptions}
+        disabled={pending}
+        onChange={(next) => save({ aiCaptions: next })}
       />
       <div className="space-y-1.5 py-4 last:pb-0">
         <label htmlFor={daysId} className="block text-sm font-medium">

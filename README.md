@@ -163,6 +163,7 @@ All configuration lives in environment variables. Locally use `.env.local` (neve
 | `INSTAGRAM_API_VERSION` | optional | e.g. `v23.0`. Empty uses the app's default |
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | uploads, scraping, posting | From the Cloudinary dashboard |
 | `REDDIT_CLIENT_ID` / `_CLIENT_SECRET` / `_USER_AGENT` | scraping only | Only if Reddit approves API access (see section 3) |
+| `GEMINI_API_KEY` / `GROQ_API_KEY` | AI captions (optional) | Free keys from Google AI Studio and console.groq.com. Gemini is tried first, Groq is the backup. Names must use underscores. `GEMINI_MODEL` / `GROQ_MODEL` override the default models if one is retired |
 | `INNGEST_DEV` | local jobs | Set to `1` locally. **Do not set in production** |
 | `INNGEST_SIGNING_KEY` / `INNGEST_EVENT_KEY` | production jobs | From Inngest Cloud (or added by its Vercel integration) |
 | `LOG_LEVEL` | optional | `debug`, `info`, `warn`, `error` or `silent`. Default: `debug` in dev, `info` in production |
@@ -244,7 +245,7 @@ First-run walkthrough once the services are connected:
 6. **Sit back:** the 5-minute job posts each meme at its time (up to 5 minutes late is normal).
 7. **Watch:** the **Activity** page and the alerts banner show failures, an expiring token, or a nearly empty queue.
 
-Captions: scraped memes get `<title>` plus a credit line (`Credit: u/author on Reddit (r/sub)`); uploaded memes get just their title. A caption you edit is used as-is.
+Captions: with **Write captions with AI** on (Settings → Automation) and a Gemini and/or Groq key set, a job writes a short, funny caption plus hashtags for each scheduled post (soonest first, a couple every 5 minutes). Gemini is tried first; if it errors or is rate limited, Groq writes it; if both fail, the post keeps the default caption (`<title>` plus a credit line like `Credit: u/author on Reddit (r/sub)`; uploaded memes get just their title). The credit line is kept in AI captions. Open a post's edit panel to change a caption or press **Write with AI** to get a new suggestion (it is only saved when you press Save). A caption you edit is used as-is and never overwritten. Publishing never calls the AI, so a post scheduled less than ~5 minutes ahead may go out with the default caption.
 
 ## Scripts
 
@@ -375,6 +376,8 @@ Things that are different in production:
 
 **Verified end to end in production:** upload, approve, schedule, Instagram connect, *Publish now*, and automatic publishing through Inngest.
 
+**AI captions:** built and checked with real Gemini and Groq keys (provider chain, "Write with AI" button, settings switch). The background job has not yet run on Vercel/Inngest, and production needs the migration `0002` plus the two keys in Vercel.
+
 **Not yet verified against the real services:** Reddit scraping (needs Reddit API access), the daily token refresh, the image cleanup job, and real-world failure cases such as an expired token.
 
-**Not built (ideas):** AI-generated captions and hashtags, video memes / Reels, email or push alerts, multiple Instagram accounts, post analytics.
+**Not built (ideas):** video memes / Reels, email or push alerts, multiple Instagram accounts, post analytics.

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   getScheduleCaptionInfo,
+  getSchedulePost,
   getSettings,
   rescheduleTo,
   saveSettings,
@@ -11,6 +12,7 @@ import {
   updateScheduleCaption,
 } from "@/db/queries";
 import { recordActivity } from "@/lib/activity";
+import { generateCaptionFor } from "@/lib/ai/run";
 import { requireAdmin } from "@/lib/auth/session";
 import { getLogger } from "@/lib/log";
 import { parseLocalDateTime } from "@/lib/schedule/local-time";
@@ -77,6 +79,7 @@ export async function updateSettings(
       autoScrape: current.autoScrape,
       autoSchedule: current.autoSchedule,
       autoScheduleDays: current.autoScheduleDays,
+      aiCaptions: current.aiCaptions,
     });
     await recordActivity({ level: "info", kind: "settings.saved", message: "Settings updated", meta: { slots: parsed.data.postSlots, timezone: parsed.data.timezone, subreddits: parsed.data.subreddits } });
     revalidatePath("/", "layout");
@@ -104,6 +107,7 @@ export async function updateAutomation(patch: AutomationPatch): Promise<Settings
       autoScrape: parsed.data.autoScrape ?? current.autoScrape,
       autoSchedule: parsed.data.autoSchedule ?? current.autoSchedule,
       autoScheduleDays: parsed.data.autoScheduleDays ?? current.autoScheduleDays,
+      aiCaptions: parsed.data.aiCaptions ?? current.aiCaptions,
     };
     await saveSettings(next);
     await recordActivity({ level: "info", kind: "settings.saved", message: "Automation settings updated", meta: parsed.data });
@@ -157,4 +161,22 @@ export async function editScheduledPost(_prev: ActionState, formData: FormData):
     log.error({ err: e }, "editScheduledPost failed");
     return { ok: false, message: "That time slot is already taken by another post." };
   }
+}
+
+export type SuggestState = { ok: true; caption: string; provider: string } | { ok: false; message: string };
+
+/**
+ * "Write with AI" in the edit panel: returns a suggested caption for the admin to review.
+ * Nothing is saved until they press Save changes.
+ */
+export async function suggestCaption(scheduleId: string): Promise<SuggestState> {
+  await requireAdmin();
+  const id = z.string().uuid().safeParse(scheduleId);
+  if (!id.success) return { ok: false, message: "Invalid post." };
+  const post = await getSchedulePost(id.data);
+  if (!post) return { ok: false, message: "That post no longer exists." };
+  const r = await generateCaptionFor(post);
+  if (r.ok) return { ok: true, caption: r.caption, provider: r.provider };
+  log.warn({ failures: r.failures }, "suggestCaption failed");
+  return { ok: false, message: "The AI services didn’t answer. Try again in a moment, or write the caption yourself." };
 }

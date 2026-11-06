@@ -62,6 +62,10 @@ export const scheduledPosts = pgTable(
       .notNull()
       .references(() => scrapedPosts.id, { onDelete: "cascade" }),
     caption: text("caption").default("").notNull(),
+    // which AI service wrote the caption (null: written by hand, or not generated yet)
+    captionProvider: varchar("caption_provider", { length: 32 }),
+    // failed AI attempts; the caption job gives up after a few so a bad key can't loop forever
+    captionAiAttempts: integer("caption_ai_attempts").default(0).notNull(),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
     status: scheduledStatus("status").default("pending").notNull(),
     igMediaId: varchar("ig_media_id", { length: 64 }),
@@ -92,6 +96,8 @@ export const settings = pgTable("settings", {
   // schedule a post into the next free slot as soon as it is approved
   autoSchedule: boolean("auto_schedule").default(false).notNull(),
   autoScheduleDays: integer("auto_schedule_days").default(7).notNull(),
+  // write captions for scheduled posts with AI (needs GEMINI_API_KEY and/or GROQ_API_KEY)
+  aiCaptions: boolean("ai_captions").default(true).notNull(),
 });
 
 // Business events (posted, failed, scraped, logged in...) kept so you can see what

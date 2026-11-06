@@ -5,8 +5,14 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { setDbForTests } from "./index";
 import {
+  bumpCaptionAttempts,
+  CAPTION_MAX_ATTEMPTS,
   claimForPublishing,
   failMissed,
+  getSchedulePost,
+  listCaptionJobs,
+  replaceWithAiCaption,
+  saveAiCaption,
   listDueScheduleIds,
   deleteIgAccounts,
   getIgAccount,
@@ -77,8 +83,8 @@ describe("settings", () => {
 
   it("creates defaults on first read and persists updates", async () => {
     expect((await getSettings()).postSlots).toEqual(["09:00", "14:00", "20:00"]);
-    await saveSettings({ subreddits: ["a"], scrapeCount: 5, postSlots: ["10:00"], timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3 });
-    expect(await getSettings()).toMatchObject({ subreddits: ["a"], scrapeCount: 5, timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3 });
+    await saveSettings({ subreddits: ["a"], scrapeCount: 5, postSlots: ["10:00"], timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3, aiCaptions: true });
+    expect(await getSettings()).toMatchObject({ subreddits: ["a"], scrapeCount: 5, timezone: "UTC", autoScrape: false, autoSchedule: true, autoScheduleDays: 3, aiCaptions: true });
   });
 });
 
@@ -355,5 +361,76 @@ describe("due and missed posts", () => {
     const [row] = await db.select().from(schema.scheduledPosts);
     await claimForPublishing(row.id);
     expect(await listDueScheduleIds(at("2026-10-16T12:00:00Z"), at("2026-10-16T00:00:00Z"), 5)).toEqual([]);
+  });
+});
+
+describe("AI captions", () => {
+  async function seedSchedule(n: number, iso: string) {
+    await insertScrapedPost(post(n));
+    await insertSchedule([{ scrapedPostId: await idOf(`r${n}`), scheduledAt: new Date(iso) }]);
+    return (await db.select().from(schema.scheduledPosts)).find((r) => r.scheduledAt.toISOString() === new Date(iso).toISOString())!;
+  }
+  const row = async (id: string) => (await db.select().from(schema.scheduledPosts).where(eq(schema.scheduledPosts.id, id)))[0];
+
+  it("lists pending posts without a caption, soonest first, with their meme", async () => {
+    const later = await seedSchedule(1, "2030-01-02T10:00:00Z");
+    const sooner = await seedSchedule(2, "2030-01-01T10:00:00Z");
+    const jobs = await listCaptionJobs(10);
+    expect(jobs.map((j) => j.scheduleId)).toEqual([sooner.id, later.id]);
+    expect(jobs[0].post.title).toBe("t2");
+    expect(await listCaptionJobs(1)).toHaveLength(1);
+  });
+
+  it("skips posts that already have a caption, are not pending, or used up their attempts", async () => {
+    const captioned = await seedSchedule(1, "2030-01-01T10:00:00Z");
+    const posted = await seedSchedule(2, "2030-01-02T10:00:00Z");
+    const tired = await seedSchedule(3, "2030-01-03T10:00:00Z");
+    const open = await seedSchedule(4, "2030-01-04T10:00:00Z");
+    await updateScheduleCaption(captioned.id, "mine");
+    await db.update(schema.scheduledPosts).set({ status: "posted" }).where(eq(schema.scheduledPosts.id, posted.id));
+    for (let i = 0; i < CAPTION_MAX_ATTEMPTS; i++) await bumpCaptionAttempts(tired.id);
+    expect((await listCaptionJobs(10)).map((j) => j.scheduleId)).toEqual([open.id]);
+  });
+
+  it("saveAiCaption writes into an empty caption and records the provider", async () => {
+    const r = await seedSchedule(1, "2030-01-01T10:00:00Z");
+    expect(await saveAiCaption(r.id, "funny\n\n#a", "gemini")).toBe(true);
+    expect(await row(r.id)).toMatchObject({ caption: "funny\n\n#a", captionProvider: "gemini" });
+  });
+
+  it("saveAiCaption never overwrites a caption the admin typed meanwhile", async () => {
+    const r = await seedSchedule(1, "2030-01-01T10:00:00Z");
+    await updateScheduleCaption(r.id, "typed by hand");
+    expect(await saveAiCaption(r.id, "ai", "groq")).toBe(false);
+    expect(await row(r.id)).toMatchObject({ caption: "typed by hand", captionProvider: null });
+  });
+
+  it("saveAiCaption skips posts that are no longer pending", async () => {
+    const r = await seedSchedule(1, "2030-01-01T10:00:00Z");
+    await claimForPublishing(r.id);
+    expect(await saveAiCaption(r.id, "ai", "groq")).toBe(false);
+  });
+
+  it("editing by hand clears the AI marker", async () => {
+    const r = await seedSchedule(1, "2030-01-01T10:00:00Z");
+    await saveAiCaption(r.id, "ai", "gemini");
+    await updateScheduleCaption(r.id, "tweaked");
+    expect(await row(r.id)).toMatchObject({ caption: "tweaked", captionProvider: null });
+  });
+
+  it("replaceWithAiCaption overwrites an existing caption, resets attempts, but not for posted posts", async () => {
+    const r = await seedSchedule(1, "2030-01-01T10:00:00Z");
+    await updateScheduleCaption(r.id, "old");
+    await bumpCaptionAttempts(r.id);
+    expect(await replaceWithAiCaption(r.id, "new", "groq")).toBe(true);
+    expect(await row(r.id)).toMatchObject({ caption: "new", captionProvider: "groq", captionAiAttempts: 0 });
+    await db.update(schema.scheduledPosts).set({ status: "posted" }).where(eq(schema.scheduledPosts.id, r.id));
+    expect(await replaceWithAiCaption(r.id, "again", "groq")).toBe(false);
+  });
+
+  it("getSchedulePost returns the meme behind a schedule row", async () => {
+    const r = await seedSchedule(1, "2030-01-01T10:00:00Z");
+    expect((await getSchedulePost(r.id))?.title).toBe("t1");
+    expect(await getSchedulePost("00000000-0000-4000-8000-000000000000")).toBeNull();
   });
 });

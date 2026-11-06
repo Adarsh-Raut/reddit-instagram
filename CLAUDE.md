@@ -27,7 +27,7 @@ A dashboard tool that scrapes memes from Reddit, lets an admin approve them, and
 4. Approving posts schedules them automatically, for a single day or a range (e.g. 7 or 30 days).
 5. A scheduler publishes due posts to Instagram.
 
-Out of scope for now: AI captions and hashtags (planned later), video/Reels.
+AI captions with hashtags are built (Gemini first, Groq as backup, see `src/lib/ai`). Out of scope for now: video/Reels.
 
 ## Tech stack
 
@@ -111,8 +111,10 @@ Create a media container (image URL + caption) → poll its status until ready �
 - `src/db/queries.ts` — all DB access. Keep the number of queries per page small: in production each query is a separate HTTP round trip to Neon. The alerts banner (runs on every page) gets everything from ONE statement, `getAlertInputs()`, and `getSettings()` is a plain read (it only inserts the very first time). Never add a write to a read path, and don't add more per-page queries to the layout. `queries.test.ts` runs them against in-memory PGlite using the real migration
 - Pages (in the `(app)` route group, which adds the sidebar shell `components/app-shell.tsx`): `/` Memes (tabs, search; Approved tab has the schedule form), `/schedule`, `/activity`, `/settings`
 - `src/lib/instagram` — Instagram Login API client (`api.ts`), publish service (`publish.ts`, claims a row atomically so a post is never published twice), config. `caption.ts` is pure and shared by publishing and the preview (`buildCaption`, `pickCaption`, `analyzeCaption` with Instagram's limits: 2,200 characters, 30 hashtags, 20 mentions); never duplicate caption logic elsewhere. `preview-url.ts` returns the same `instagramReadyUrl()` that publishing sends, so the preview (`components/instagram-preview.tsx`, shown in the schedule edit panel and on Approved cards) cannot drift from what is posted. OAuth routes in `src/app/api/instagram/{connect,callback}`. Tokens are AES-GCM encrypted (`src/lib/crypto.ts`, needs `TOKEN_ENCRYPTION_KEY`).
+- `src/lib/ai` — AI captions. `prompt.ts` (pure: prompt, `parseAiCaption` sanitising the reply, `composeCaption` = line + credit + hashtags), `providers.ts` (Gemini and Groq clients with injected `fetch`; keys `GEMINI_API_KEY`/`GROQ_API_KEY`, models overridable with `GEMINI_MODEL`/`GROQ_MODEL`), `generate.ts` (`generateCaption` tries providers in order and never throws; `loadImage`), `run.ts` (real wiring). Captions are stored in `scheduled_posts.caption` by the `generate-captions` job (every 5 min, 2 per run, soonest first) or the "Write with AI" button; `saveAiCaption` only fills an EMPTY caption so hand edits win, and the job gives up on a post after `CAPTION_MAX_ATTEMPTS`. Publishing never calls the AI. Tests mock `fetch`; never call the real APIs from automated tests. Model names go stale quickly (gemini-2.5-flash already 404s for new keys): re-check with the providers' model lists when a provider starts failing.
 - `src/inngest` — client, functions, and job logic (`jobs.ts`, dependency-injected and tested). Served at `/api/inngest`.
   - `publish-due-posts` runs every 5 min: publishes at most ONE due post per run (spaces out catch-up posts), and marks posts more than 6h late as `failed` ("Missed its time slot") instead of posting them late. Failed posts are never auto-retried (avoids double posts); the user clicks Retry.
+  - `generate-captions` runs every 5 min (switch: setting `aiCaptions`); a no-op without API keys.
   - `refresh-instagram-token` runs daily at 03:00 UTC. `scrape-memes-daily` runs at 06:00 UTC (setting `autoScrape`). `cleanup-rejected-images` runs daily and drops Cloudinary images of memes rejected >14 days ago.
   - `publish-due-posts` also marks posts stuck in `publishing` >15 min as failed (can't know if Instagram accepted them, so a human checks before Retry).
   - To test locally: `INNGEST_DEV=1 npm run dev`, then `npx inngest-cli@latest dev -u http://localhost:3000/api/inngest`, and `curl -X PUT localhost:3000/api/inngest` to sync.

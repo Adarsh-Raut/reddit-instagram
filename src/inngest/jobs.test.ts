@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import type { IgAccount } from "@/db/queries";
 import {
+  CAPTIONS_PER_RUN,
   MAX_LATE_MS,
   REJECTED_IMAGE_TTL_MS,
   STUCK_AFTER_MS,
   runAutoScrape,
+  runGenerateCaptions,
   runImageCleanup,
   runPublishDue,
   runRefreshToken,
   shouldRefresh,
+  type CaptionJobDeps,
   type CleanupJobDeps,
   type PublishJobDeps,
   type ScrapeJobDeps,
@@ -185,5 +188,56 @@ describe("runImageCleanup", () => {
     expect(r.errors[0]).toMatch(/memes\/a: rate limited/);
     expect(d.clear).toHaveBeenCalledTimes(1);
     expect(d.clear).toHaveBeenCalledWith("2");
+  });
+});
+
+describe("runGenerateCaptions", () => {
+  const job = (n: number) => ({ scheduleId: `s${n}`, post: { id: `p${n}`, title: `t${n}` } as never });
+  const capDeps = (over: Partial<CaptionJobDeps> = {}): CaptionJobDeps => ({
+    getSettings: vi.fn().mockResolvedValue({ aiCaptions: true }),
+    hasProviders: vi.fn().mockReturnValue(true),
+    listJobs: vi.fn().mockResolvedValue([job(1), job(2)]),
+    generate: vi.fn().mockResolvedValue({ ok: true, caption: "cap", provider: "gemini", failures: [] }),
+    save: vi.fn().mockResolvedValue(true),
+    bumpAttempts: vi.fn().mockResolvedValue(undefined),
+    ...over,
+  });
+
+  it("does nothing when AI captions are switched off", async () => {
+    const d = capDeps({ getSettings: vi.fn().mockResolvedValue({ aiCaptions: false }) });
+    expect(await runGenerateCaptions(d)).toMatchObject({ skipped: "off", generated: [] });
+    expect(d.listJobs).not.toHaveBeenCalled();
+  });
+  it("does nothing when no API key is set", async () => {
+    const d = capDeps({ hasProviders: vi.fn().mockReturnValue(false) });
+    expect(await runGenerateCaptions(d)).toMatchObject({ skipped: "no-keys" });
+    expect(d.listJobs).not.toHaveBeenCalled();
+  });
+  it("writes a caption for each due post, limited per run", async () => {
+    const d = capDeps();
+    const r = await runGenerateCaptions(d);
+    expect(d.listJobs).toHaveBeenCalledWith(CAPTIONS_PER_RUN);
+    expect(d.save).toHaveBeenCalledWith("s1", "cap", "gemini");
+    expect(d.save).toHaveBeenCalledWith("s2", "cap", "gemini");
+    expect(r).toEqual({ skipped: null, generated: ["gemini", "gemini"], failed: 0, failures: [] });
+  });
+  it("counts a failed post, bumps its attempts and reports the reasons", async () => {
+    const d = capDeps({
+      listJobs: vi.fn().mockResolvedValue([job(1)]),
+      generate: vi.fn().mockResolvedValue({ ok: false, failures: ["gemini: HTTP 429", "groq: HTTP 500"] }),
+    });
+    const r = await runGenerateCaptions(d);
+    expect(r).toMatchObject({ failed: 1, generated: [], failures: ["gemini: HTTP 429", "groq: HTTP 500"] });
+    expect(d.bumpAttempts).toHaveBeenCalledWith("s1");
+    expect(d.save).not.toHaveBeenCalled();
+  });
+  it("one failing post does not stop the others", async () => {
+    const generate = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, failures: ["x"] })
+      .mockResolvedValueOnce({ ok: true, caption: "c", provider: "groq", failures: ["gemini: HTTP 429"] });
+    const r = await runGenerateCaptions(capDeps({ generate }));
+    expect(r).toMatchObject({ generated: ["groq"], failed: 1 });
+    expect(r.failures).toEqual(["x", "gemini: HTTP 429"]);
   });
 });

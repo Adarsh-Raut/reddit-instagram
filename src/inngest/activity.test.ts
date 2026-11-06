@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeCleanup, describePublishRun, describeRefresh } from "./activity";
+import { describeCaptionRun, describeCleanup, describePublishRun, describeRefresh } from "./activity";
 
 describe("describePublishRun", () => {
   it("says nothing for an ordinary run (per-post results are logged by the publisher)", () => {
@@ -35,5 +35,29 @@ describe("describeCleanup", () => {
     expect(events[0].message).toBe("Removed 3 old images from Cloudinary, 1 failed");
     expect(events[1]).toMatchObject({ kind: "cleanup.activity", meta: { pruned: 10 } });
     expect(describeCleanup({ deleted: 1, errors: [] }, 0)[0]).toMatchObject({ level: "info" });
+  });
+});
+
+describe("describeCaptionRun", () => {
+  const run = (over = {}) => ({ skipped: null, generated: [], failed: 0, failures: [], ...over });
+  it("says nothing when there was nothing to do or the feature is off", () => {
+    expect(describeCaptionRun(run())).toEqual([]);
+    expect(describeCaptionRun(run({ skipped: "off" }))).toEqual([]);
+    expect(describeCaptionRun(run({ skipped: "no-keys" }))).toEqual([]);
+  });
+  it("records written captions with the providers used", () => {
+    const [e] = describeCaptionRun(run({ generated: ["gemini", "groq", "gemini"] }));
+    expect(e).toMatchObject({ level: "info", kind: "caption.generated" });
+    expect(e.message).toBe("Wrote 3 AI captions (gemini, groq)");
+  });
+  it("notes a fallback (Gemini failed, Groq covered) as info with the reason", () => {
+    const events = describeCaptionRun(run({ generated: ["groq"], failures: ["gemini: HTTP 429"] }));
+    expect(events.map((e) => e.kind)).toEqual(["caption.generated", "caption.fallback"]);
+    expect(events[1]).toMatchObject({ level: "info", meta: { failures: ["gemini: HTTP 429"] } });
+  });
+  it("warns when no provider could write a caption", () => {
+    const [e] = describeCaptionRun(run({ failed: 1, failures: ["gemini: HTTP 429", "groq: HTTP 500"] }));
+    expect(e).toMatchObject({ level: "warn", kind: "caption.failed" });
+    expect(e.message).toContain("default caption");
   });
 });

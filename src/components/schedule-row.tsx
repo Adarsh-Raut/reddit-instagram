@@ -1,12 +1,12 @@
 "use client";
 
 import { Tabs } from "@base-ui/react/tabs";
-import { EllipsisIcon, EyeIcon, ImageOffIcon, LoaderCircleIcon, PencilIcon, SendIcon, Trash2Icon } from "lucide-react";
+import { EllipsisIcon, EyeIcon, ImageOffIcon, LoaderCircleIcon, PencilIcon, SendIcon, SparklesIcon, Trash2Icon } from "lucide-react";
 import Image from "next/image";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { publishNow } from "@/app/actions/instagram";
-import { editScheduledPost, unschedulePost, type ActionState } from "@/app/actions/schedule";
+import { editScheduledPost, suggestCaption, unschedulePost, type ActionState } from "@/app/actions/schedule";
 import { InstagramPreview } from "@/components/instagram-preview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,11 +64,26 @@ function EditSheet({
   const [state, action, pending] = useActionState<ActionState, FormData>(editScheduledPost, null);
   const [caption, setCaption] = useState(row.caption);
   const [whenError, setWhenError] = useState<string | null>(null);
+  const [writing, startWriting] = useTransition();
   const focusing = useProgrammaticFocus();
   useActionToast(state?.ok ? state : null);
   useEffect(() => {
     if (state?.ok) onOpenChange(false);
   }, [state, onOpenChange]);
+
+  function writeWithAi() {
+    startWriting(async () => {
+      try {
+        const r = await suggestCaption(row.id);
+        if (r.ok) {
+          setCaption(r.caption);
+          toast.success("Caption written. Review it, then save.");
+        } else toast.error(r.message);
+      } catch {
+        toast.error("We couldn’t reach the AI service. Check your connection and try again.");
+      }
+    });
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -110,7 +125,7 @@ function EditSheet({
               optional
               hint={
                 <>
-                  Leave empty to post the default, which credits the original creator. Add your own hashtags here.{" "}
+                  Leave empty to post the default, which credits the original creator. AI captions appear here once written; edit them freely.{" "}
                   <span className="tabular-nums">{caption.length}/2200</span>
                 </>
               }
@@ -127,6 +142,10 @@ function EditSheet({
                 />
               )}
             </Field>
+            <Button type="button" variant="outline" size="sm" className="max-md:h-11" onClick={writeWithAi} disabled={writing} aria-busy={writing}>
+              {writing ? <LoaderCircleIcon data-icon="inline-start" className="animate-spin" /> : <SparklesIcon data-icon="inline-start" />}
+              {writing ? "Writing…" : "Write with AI"}
+            </Button>
             <Field label={`Post at (${timezone})`} error={whenError}>
               {(a11y) => (
                 <Input

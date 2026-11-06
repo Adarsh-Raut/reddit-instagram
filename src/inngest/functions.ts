@@ -1,8 +1,8 @@
 import { pruneActivity } from "@/db/queries";
 import { recordActivity, type ActivityEvent } from "@/lib/activity";
-import { describeCleanup, describePublishRun, describeRefresh } from "./activity";
+import { describeCaptionRun, describeCleanup, describePublishRun, describeRefresh } from "./activity";
 import { inngest } from "./client";
-import { runAutoScrape, runImageCleanup, runPublishDue, runRefreshToken } from "./jobs";
+import { runAutoScrape, runGenerateCaptions, runImageCleanup, runPublishDue, runRefreshToken } from "./jobs";
 
 const ACTIVITY_KEEP_MS = 90 * 24 * 60 * 60 * 1000;
 
@@ -66,4 +66,13 @@ export const cleanupImages = inngest.createFunction(
     }),
 );
 
-export const functions = [publishDuePosts, refreshInstagramToken, scrapeMemesDaily, cleanupImages];
+/**
+ * Every 5 minutes: write AI captions (Gemini first, Groq as the backup) for the soonest scheduled
+ * posts that have none. Separate from publishing on purpose, so an AI outage never delays a post.
+ */
+export const generateCaptions = inngest.createFunction(
+  { id: "generate-captions", retries: 0, concurrency: 1, triggers: [{ cron: "*/5 * * * *" }] },
+  async ({ step }) => step.run("captions", () => tracked("captions", runGenerateCaptions, describeCaptionRun)),
+);
+
+export const functions = [publishDuePosts, generateCaptions, refreshInstagramToken, scrapeMemesDaily, cleanupImages];

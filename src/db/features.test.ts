@@ -56,7 +56,7 @@ async function scheduledRow(n: number, when: string) {
 const settings = (over = {}) =>
   saveSettings({
     subreddits: ["memes"], scrapeCount: 15, postSlots: ["09:00", "14:00", "20:00"], timezone: "UTC",
-    autoScrape: true, autoSchedule: false, autoScheduleDays: 7, ...over,
+    autoScrape: true, autoSchedule: false, autoScheduleDays: 7, aiCaptions: true, ...over,
   });
 
 beforeAll(async () => {

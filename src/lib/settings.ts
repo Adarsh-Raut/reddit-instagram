@@ -32,6 +32,7 @@ export const settingsInput = z.object({
   autoScrape: z.preprocess((v) => v === "on" || v === true, z.boolean()),
   autoSchedule: z.preprocess((v) => v === "on" || v === true, z.boolean()),
   autoScheduleDays: z.coerce.number().int().min(1).max(90),
+  aiCaptions: z.preprocess((v) => v === "on" || v === true, z.boolean()),
 });
 
 export type SettingsInput = z.infer<typeof settingsInput>;
@@ -49,6 +50,7 @@ export const automationPatch = z
   .object({
     autoScrape: z.boolean().optional(),
     autoSchedule: z.boolean().optional(),
+    aiCaptions: z.boolean().optional(),
     autoScheduleDays: z.number().int().min(1, "Use between 1 and 90 days.").max(90, "Use between 1 and 90 days.").optional(),
   })
   .strict();

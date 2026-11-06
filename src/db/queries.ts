@@ -150,6 +150,7 @@ export async function saveSettings(v: {
   autoScrape: boolean;
   autoSchedule: boolean;
   autoScheduleDays: number;
+  aiCaptions: boolean;
 }) {
   await getDb()
     .insert(settings)
@@ -336,10 +337,73 @@ export async function failStuck(claimedBefore: Date): Promise<number> {
 export async function updateScheduleCaption(scheduleId: string, caption: string): Promise<boolean> {
   const rows = await getDb()
     .update(scheduledPosts)
-    .set({ caption })
+    .set({ caption, captionProvider: null })
     .where(and(eq(scheduledPosts.id, scheduleId), inArray(scheduledPosts.status, ["pending", "failed"])))
     .returning({ id: scheduledPosts.id });
   return rows.length > 0;
+}
+
+/** Give up on AI for a post after this many failed attempts (a bad key shouldn't loop forever). */
+export const CAPTION_MAX_ATTEMPTS = 3;
+
+export type CaptionJob = { scheduleId: string; post: ScrapedPost };
+
+/** Soonest-first scheduled posts that still have no caption and haven't used up their AI attempts. */
+export async function listCaptionJobs(limit: number): Promise<CaptionJob[]> {
+  const rows = await getDb()
+    .select({ scheduleId: scheduledPosts.id, post: scrapedPosts })
+    .from(scheduledPosts)
+    .innerJoin(scrapedPosts, eq(scrapedPosts.id, scheduledPosts.scrapedPostId))
+    .where(
+      and(
+        eq(scheduledPosts.status, "pending"),
+        eq(scheduledPosts.caption, ""),
+        lt(scheduledPosts.captionAiAttempts, CAPTION_MAX_ATTEMPTS),
+      ),
+    )
+    .orderBy(asc(scheduledPosts.scheduledAt))
+    .limit(limit);
+  return rows;
+}
+
+/**
+ * Store an AI caption only if the post is still pending with an empty caption, so a caption
+ * the admin typed in the meantime is never overwritten. Returns false when it was skipped.
+ */
+export async function saveAiCaption(scheduleId: string, caption: string, provider: string): Promise<boolean> {
+  const rows = await getDb()
+    .update(scheduledPosts)
+    .set({ caption, captionProvider: provider })
+    .where(and(eq(scheduledPosts.id, scheduleId), eq(scheduledPosts.status, "pending"), eq(scheduledPosts.caption, "")))
+    .returning({ id: scheduledPosts.id });
+  return rows.length > 0;
+}
+
+/** "Write with AI" button: replaces whatever caption is there. Only for posts not yet published. */
+export async function replaceWithAiCaption(scheduleId: string, caption: string, provider: string): Promise<boolean> {
+  const rows = await getDb()
+    .update(scheduledPosts)
+    .set({ caption, captionProvider: provider, captionAiAttempts: 0 })
+    .where(and(eq(scheduledPosts.id, scheduleId), inArray(scheduledPosts.status, ["pending", "failed"])))
+    .returning({ id: scheduledPosts.id });
+  return rows.length > 0;
+}
+
+export async function bumpCaptionAttempts(scheduleId: string) {
+  await getDb()
+    .update(scheduledPosts)
+    .set({ captionAiAttempts: sql`${scheduledPosts.captionAiAttempts} + 1` })
+    .where(eq(scheduledPosts.id, scheduleId));
+}
+
+/** The post behind a schedule row, for regenerating its caption. */
+export async function getSchedulePost(scheduleId: string): Promise<ScrapedPost | null> {
+  const [row] = await getDb()
+    .select({ post: scrapedPosts })
+    .from(scheduledPosts)
+    .innerJoin(scrapedPosts, eq(scrapedPosts.id, scheduledPosts.scrapedPostId))
+    .where(eq(scheduledPosts.id, scheduleId));
+  return row?.post ?? null;
 }
 
 /**

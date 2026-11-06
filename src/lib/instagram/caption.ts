@@ -8,14 +8,20 @@ export const CAPTION_MAX_MENTIONS = 20;
 /** Roughly where the feed cuts a caption and shows "… more". */
 export const CAPTION_FEED_PREVIEW_LENGTH = 125;
 
-/** Caption with credit to the original poster. AI captions will replace this later. */
-export function buildCaption(post: { title: string; author: string | null; subreddit: string }) {
-  // memes the admin uploaded themselves have no one to credit
-  if (post.subreddit === "manual") return post.title;
-  const credit = post.author
+type CaptionPost = { title: string; author: string | null; subreddit: string };
+
+/** Credit line for the original creator, or null for memes the admin uploaded (no one to credit). */
+export function creditLine(post: CaptionPost): string | null {
+  if (post.subreddit === "manual") return null;
+  return post.author
     ? `Credit: u/${post.author} on Reddit (r/${post.subreddit})`
     : `Source: r/${post.subreddit} on Reddit`;
-  return `${post.title}\n\n${credit}`;
+}
+
+/** Default caption: the title plus credit to the original poster (used when no caption is set). */
+export function buildCaption(post: CaptionPost) {
+  const credit = creditLine(post);
+  return credit ? `${post.title}\n\n${credit}` : post.title;
 }
 
 /** The caption that is actually sent: the edited one, or the default when it is empty. */

@@ -67,6 +67,7 @@ async function Content({ searchParams }: { searchParams: PageProps<"/settings">[
             autoScrape={settings.autoScrape}
             autoSchedule={settings.autoSchedule}
             autoScheduleDays={settings.autoScheduleDays}
+            aiCaptions={settings.aiCaptions}
           />
         </Section>
       </div>
